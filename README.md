@@ -75,18 +75,48 @@ everywhere as `Source Field`, so **existing configurations behave exactly as bef
 type coercion is performed, so a target input typed as Number, Boolean, or Date may reject
 it.
 
-### 3. Migration tooling — not yet built
+### 3. Migration tool
 
-> **This does not exist yet.** There is no automated tool in this repository for migrating
-> configuration records from the managed `dca_mass_action` package to this fork. Cutover is
-> currently a manual re-creation of `Mass_Action_Configuration__c` and
-> `Mass_Action_Mapping__c` records in the target org.
->
+`toolMassActionMigration` copies configurations and their field mappings out of the
+**installed managed package** and into the un-namespaced objects. Run it once per target
+org, **after** deploying this source and **before** uninstalling the managed package —
+uninstalling deletes the records that are the migration's source of truth.
+
+```apex
+// dry run first: builds the target records, reports counts, performs no DML
+System.debug( toolMassActionMigration.migrate( 'mas', false ) );
+
+// then commit
+System.debug( toolMassActionMigration.migrate( 'mas', true ) );
+```
+
+Pass the installed package's namespace, without trailing underscores, as shown in
+**Setup → Installed Packages**.
+
+How it copies fields matters. For each createable field on the un-namespaced target object,
+a value is copied **only if the managed object also exposes that field** as
+`namespace__field`. So fields that exist only on this newer fork — `Mapping_Type__c` and
+`Source_Value__c` — are never read from the older managed package and take their defaults.
+A migrated mapping therefore comes across as a `Source Field` mapping, which is what it was.
+
+Other properties worth knowing:
+
+- **Idempotent.** Configurations upsert on the unique external id `DeveloperName__c`, and a
+  configuration's mappings are deleted and rebuilt, so the migration is safe to re-run.
+- **Dynamic throughout**, so the class compiles and deploys whether or not the managed
+  package is installed, and keeps compiling after it is uninstalled.
+- **`without sharing` by design** (a documented exception to this project's with-sharing
+  default) so it captures every configuration regardless of the running user's record
+  sharing. Run it as an administrator.
+- **Preserves `Active__c`** and schedules nothing itself. See the caution in the cutover
+  steps below — the configuration trigger may still schedule what you migrate.
+- Reports per-row errors rather than throwing, so one bad record does not abort the run.
+
 > The inherited `MA_InstallHandler`, `MA_UpgradePageLayoutsService`,
 > `MA_SetConfigUniqueNameBatchable`, and `MA_UpgradeMassActionLogsBatchable` classes are
-> **upstream package-version upgrade helpers**, not migration tooling. They upgrade data
-> between versions of the managed package and are effectively dormant in a source
-> deployment, which never runs an install handler.
+> **upstream package-version upgrade helpers**, not part of this migration. They upgrade
+> data between versions of the managed package and are dormant in a source deployment,
+> which never runs an install handler.
 
 ---
 
@@ -176,24 +206,34 @@ exist in the target org, because they run with `SeeAllData = true` against a pac
 
 ## Cutover from the managed package
 
-Generic outline. Adapt per org, and read the migration-tooling note above first.
+Generic outline. Adapt per org.
 
-1. **Inventory** the existing `dca_mass_action__Mass_Action_Configuration__c` records in the
-   target org, with their field mappings and schedules.
+1. **Inventory** the existing managed configurations in the target org, with their field
+   mappings and schedules, so you have something to reconcile against afterwards.
 2. **Deactivate** the managed package's scheduled jobs so both copies cannot run the same
    automation concurrently.
 3. **Deploy this source** to the target org and assign `Mass_Action_Admin`.
 4. **Create** the Named Credential, Auth. Provider, and Connected App via the setup wizard.
-5. **Re-create** each configuration and its field mappings in the un-namespaced objects.
-   This is manual today. Watch for Flow targets that relied on the Named Credential identity
-   — they now run as the batch job's running user.
-6. **Verify** one configuration end to end with `Active__c = false`, running it on demand
-   before scheduling it.
-7. **Activate** the new schedules, then **uninstall** the managed package once the fork has
-   run cleanly for a full cycle.
+5. **Dry run** the migration — `toolMassActionMigration.migrate( '<namespace>', false )` —
+   and check the reported counts against your inventory.
+6. **Commit** the migration with `migrate( '<namespace>', true )`. Read the returned
+   `errors` list; the tool reports per-row failures rather than throwing.
+7. **Reconcile.** Confirm each configuration and its mappings arrived, and review Flow
+   targets that relied on the Named Credential identity — they now run as the batch job's
+   running user.
+8. **Verify** one configuration end to end before trusting the rest: leave it inactive and
+   run it on demand.
+9. **Activate** the schedules, then **uninstall** the managed package once the fork has run
+   cleanly for a full cycle.
+
+> **Scheduling caution.** The migration schedules nothing itself, but it preserves
+> `Active__c`, and the configuration trigger schedules any configuration inserted with
+> `Active__c = true` and a `Schedule_Frequency__c` other than `Manual`. If you want to
+> control activation by hand, deactivate the managed configurations before migrating, or
+> migrate and then review scheduled jobs in **Setup → Scheduled Jobs**.
 
 Keep the managed package installed but idle until cutover is confirmed. Uninstalling it
-deletes its configuration records.
+deletes its configuration records, which are the migration's only source of truth.
 
 ---
 
