@@ -1,199 +1,245 @@
-<!-- SHIELDS -->
-[![Latest Version][version-shield]][version-url]
-[![Salesforce Community Support][community-shield]][community-url]
-[![Sponsor][sponsor-shield]][sponsor-url]
-[![License][license-shield]][license-url]
-[![Build Status][cicd-shield]][cicd-url]
-[![Code Coverage][codecov-shield]][codecov-url]
-
 <!-- PROJECT LOGO -->
 <p align="center">
-  <a href="https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/">
-    <img src="images/mas-logo.png" alt="Mass Action Scheduler Logo" border="0" />
-  </a>
+  <img src="images/mas-logo.png" alt="Mass Action Scheduler Logo" border="0" />
   <br />
-  Declaratively schedule process automation from reports and list views!
-  <br />
-  <a href="https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki"><strong>Explore the docs »</strong></a>
-  <br />
-  <br />
-  <a href="https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Examples">View Examples</a>
-  ·
-  <a href="https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/issues">Report Bug</a>
-  ·
-  <a href="https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/issues">Request Feature</a>
+  Declaratively schedule process automation from reports and list views.
 </p>
 
-## 📝 Table of Contents
+# Mass Action Scheduler — un-namespaced fork
 
-* [About the Project](#-about-the-project)
-* [Features](#-features)
-* [Roadmap](#-roadmap)
-* [Documentation and Discussion](#-documentation-and--discussion)
-* [Getting Started](#-getting-started)
-  - [Prerequisites](#-prerequisites)
-  - [Install Package](#-install-package)
-* [Sponsoring](#-sponsoring)
-* [Contributing](#-contributing)
-* [Authors](#️-authors)
-* [Acknowledgements](#-acknowledgements)
-* [License](#-license)
+This repository is an **un-namespaced source fork** of Doug Ayers'
+[sfdx-mass-action-scheduler](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler),
+maintained internally to **replace the managed Mass Action Scheduler package**.
 
-## 🧐 About the Project
+It is deployed from source rather than installed as a package, and carries no namespace
+prefix. There are no org-specific names, ids, endpoints, or credentials anywhere in this
+repository — the same source is intended to be **deployed into multiple orgs**. Everything
+org-specific (the Named Credential, Auth. Provider, Connected App, and the configuration
+records themselves) is created per org at deploy time.
 
-#### 🗣 Ethos
+---
 
-Mass Action Scheduler is a [free-as-in-speech](https://www.howtogeek.com/howto/31717/what-do-the-phrases-free-speech-vs.-free-beer-really-mean/) and [open source](https://opensource.com/resources/what-open-source) developed passion project of [Doug Ayers](https://douglascayers.com).
+## Why this fork exists
 
-#### 💪 Mission
+The managed package invokes every non-Apex target through the **Salesforce REST Actions
+API**, calling back into the same org through a Named Credential. That REST loopback is the
+problem.
 
-Put the power of [Batch Apex](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_batch.htm) within reach of [declarative configuration](https://help.salesforce.com/articleView?id=extend_click_intro.htm&type=5).
+A Flow invoked that way runs *inside an inbound API call that originated from an outbound
+callout*. Salesforce does not permit a callout from that context, so a target Flow could not
+perform HTTP callouts of its own. Any Flow needing to call an external service simply could
+not be used as a Mass Action target.
 
-#### 🚀 Value Proposition
+Because the package is managed, that behaviour could not be changed in place. This
+un-namespaced fork exists so the Flow invocation path can be replaced with an
+**in-transaction** invocation, which lifts the restriction.
 
-Declaratively schedule Process Builder, Flows, Quick Actions, Email Alerts, Workflow Rules, or Apex to process records from Reports, List Views, SOQL, or Apex.
+---
 
-No more waiting for records to be updated or creating clever workarounds to cause records to be updated to cause these actions to fire.
+## What is different from upstream
 
-##### Choose source data to process
+Everything not listed here is upstream behaviour, unchanged.
 
-![image](https://raw.githubusercontent.com/wiki/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/images/sources-choose-source.png)
+### 1. Flow targets run in-transaction
 
-##### Choose an action to automate
+`MA_MassActionUtils.invokeTargetAction` routes `Target_Type__c == 'Flow'` to
+`toolMassActionFlowInvoker`, which runs the flow through
+`Invocable.Action.createCustomAction( 'flow', <name> )` — one flow interview per target row,
+in the batch job's own transaction. **Target flows can now make their own HTTP callouts.**
 
-![image](https://raw.githubusercontent.com/wiki/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/images/actions-choose-action.png)
+`Workflow`, `QuickAction`, `EmailAlert`, and `Apex` targets are untouched and still go
+through the REST Actions API via the configured Named Credential.
 
-##### Map fields as inputs to selected action
+Every row is attempted even if an earlier row fails, and a failure raises a single exception
+naming the flow and listing every failed row with its inputs, so one bad record cannot
+silently mask the rest of the batch.
 
-![image](https://raw.githubusercontent.com/wiki/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/images/field-mappings-choose-fields.png)
+### 2. Static (hard-coded) field mappings
 
-##### Choose how often to automate action
+A target action or flow input can be assigned a **literal value** with no corresponding
+source field. `Mass_Action_Mapping__c` gains:
 
-![image](https://raw.githubusercontent.com/wiki/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/images/schedule-choose-scheduled.png)
+| Field | Purpose |
+|---|---|
+| `Mapping_Type__c` | `Source Field` (default) or `Static Value` |
+| `Source_Value__c` | The literal, used when `Mapping_Type__c` is `Static Value` |
 
-##### Receive near real-time updates on batch job successes and failures
+`Source_Field_Name__c` changed from required to optional; requiredness is now enforced
+conditionally in the config-builder UI and in Apex. A required target field is satisfied by
+**either** a chosen source field **or** a non-blank static value.
 
-![image](https://raw.githubusercontent.com/wiki/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/images/related-logs-of-parent-log-with-errors.png)
+Mappings created before this change have a blank `Mapping_Type__c`, which is treated
+everywhere as `Source Field`, so **existing configurations behave exactly as before**.
 
-#### 💡 Inspiration
+`Source_Value__c` is a text field and its literal is passed through exactly as entered. No
+type coercion is performed, so a target input typed as Number, Boolean, or Date may reject
+it.
 
-This project is inspired by the following IdeaExchange ideas. Please vote them up to increase chances this functionality becomes standard on the Salesforce platform. Thank you!
+### 3. Migration tooling — not yet built
 
-Inspired by Marie Chandra's idea [Ability to Schedule when Process Builder Triggers](https://success.salesforce.com/ideaView?id=08730000000DjEmAAK).
+> **This does not exist yet.** There is no automated tool in this repository for migrating
+> configuration records from the managed `dca_mass_action` package to this fork. Cutover is
+> currently a manual re-creation of `Mass_Action_Configuration__c` and
+> `Mass_Action_Mapping__c` records in the target org.
+>
+> The inherited `MA_InstallHandler`, `MA_UpgradePageLayoutsService`,
+> `MA_SetConfigUniqueNameBatchable`, and `MA_UpgradeMassActionLogsBatchable` classes are
+> **upstream package-version upgrade helpers**, not migration tooling. They upgrade data
+> between versions of the managed package and are effectively dormant in a source
+> deployment, which never runs an install handler.
 
-Inspired by Narender Singh's idea [Ability to schedule flows, workflows and processes in process builder](https://success.salesforce.com/ideaView?id=0873A000000EA71QAG).
+---
 
-## 🎈 Features
+## Behaviour changes to know before you deploy
 
-**Declarative** - no code necessary, never write Batch Apex again for queries that can be expressed in a report or list view and actions that can be expressed with a declarative alternative.
+**A Flow target now runs as the batch job's running user, not as the Named Credential
+identity.** This is the most important consequence of running in-transaction. If a Flow
+relied on the Named Credential user's permissions, record access, or sharing, it will behave
+differently. Review Flow targets for anything that assumed the integration user.
 
-**On Platform** - everything happens in Salesforce so no exporting or uploading data necessary.
+**A Flow target now shares the batch transaction's governor limits.** A flow that performs a
+callout consumes a callout from the enclosing transaction, and its DML and SOQL count against
+the batch execution's limits rather than a separate API request's.
 
-**Timely** - run actions [manually](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/On-Demand-Scheduling) or [schedule](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Scheduling) hourly, daily, weekly, or any time in between.
+**The Named Credential is still required — but not for everything.** It is used at batch
+runtime by:
 
-**Versatile** - explore the many [data sources](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Sources) and [actions](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Actions) that can be [scheduled](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Scheduling) with Mass Action Scheduler.
+- SOQL sources (`MA_SoqlSourceIterable`)
+- List View sources (`MA_ListViewSourceBatchable`)
+- Anonymous Apex targets, via the SOAP API
+- `Workflow`, `QuickAction`, `EmailAlert`, and invocable `Apex` targets, via the REST Actions
+  API
 
-## 🗺 Roadmap
+It is **no longer used by Flow targets**, and it is **not used by the config-builder UI**. A
+configuration whose source is a Report or Apex and whose target is a Flow no longer needs it
+at runtime at all.
 
-See the [open issues](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/issues) for a list of proposed features (and known issues).
+**The config-builder UI discovers actions as the running user, not through the Named
+Credential.** `MA_EditConfigRestController` performs action and action-input discovery
+against `MA_MassActionUtils.REST_API_SERVICES_URL` — the org's own domain URL — authorising
+with `UserInfo.getSessionId()`. Those requests are routed through the `LC_API` Visualforce
+bridge because Lightning session ids are not API-enabled. The admin building a configuration
+therefore needs API access and permission to see the target actions; the Named Credential is
+not involved in discovery.
 
-See the [open milestones](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/milestones?state=open) for a list of upcoming planned releases.
+**`Invocable.Action` requires a modern API version.** The project note is that
+`Invocable.Action` requires **API 56.0 or later**. *(Experimental: the exact minimum has not
+been verified against Salesforce documentation. It is moot in practice — this project targets
+API 67.0, above any candidate floor, and the in-transaction flow invocation is covered by the
+test suite.)*
 
-## 📘 Documentation and 💬 Discussion
+**API version.** The whole project is on **API 67.0**. Do not bulk-bump API versions as part
+of unrelated work; that was done once in a dedicated step.
 
-Read the [wiki](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki) for documentation on Mass Action Scheduler.
+---
 
-Read the [FAQ](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Frequently-Asked-Questions) to troubleshoot common technical issues.
+## Requirements
 
-Join our [community group](https://success.salesforce.com/_ui/core/chatter/groups/GroupProfilePage?g=0F93A000000LhvN) to discuss and solution with other Mass Action Scheduler users.
+- A Salesforce org on an API version supporting **67.0**.
+- Salesforce CLI (`sf`, v2).
+- For SOQL sources, List View sources, and non-Flow targets: a Named Credential, Auth.
+  Provider, and Connected App in the target org. The **Authentication Setup Wizard** tab
+  bundled with this app creates them for you.
 
-Raise well defined issues and ideas via the [issue tracker](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/issues).
+---
 
-## 👋 Getting Started
+## Deploying to a target org
 
-### 🚨 Prerequisites
+The same source deploys to any org. Substitute your own alias for `<target-org>`.
 
-There are a few items you need to setup before installing and using this app.
+```bash
+# 1. deploy the source
+sf project deploy start --source-dir force-app --target-org <target-org>
 
-1. You will need to [Enable Lightning Experience](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Prerequisites#1-enable-lightning-experience) because we are using Lightning Components.
-2. You will need to [Enable My Domain](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Prerequisites#2-enable-my-domain) because we are using Lightning Components.
-3. You will need to [Allow IFraming of Visualforce Pages with Clickjack Protection](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Prerequisites#3-allow-iframing-of-visualforce-pages-with-clickjack-protection) because we iframe pages in Lightning Components.
+# 2. grant access
+sf org assign permset --name Mass_Action_Admin --target-org <target-org>
 
-Please see the [instructions in the wiki](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Prerequisites) for screen shots and step-by-steps.
+# 3. create the Named Credential, Auth. Provider, and Connected App
+#    open the "Authentication Setup Wizard" tab in the target org and run it,
+#    or create the three components manually
+```
 
-### 📦 Install Package
+For a scratch org, `./scripts/create-scratch-org.sh [alias]` does all of the above and seeds
+the Account that the report tests require.
 
-1. See the [Release Notes](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Release-Notes) for install links to each package version.
-2. Assign the **Mass Action Admin** permission set to users who will configure mass actions.
-3. Finish reviewing the [Getting Started](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Getting-Started) instructions.
+### Running the tests
 
-## 💎 Sponsoring
+```bash
+sf apex run test --target-org <target-org> --code-coverage --result-format human \
+  --suite-names Mass_Action_Scheduler_Test_Suite --wait 30
+```
 
-Mass Action Scheduler is a [free-as-in-speech](https://www.howtogeek.com/howto/31717/what-do-the-phrases-free-speech-vs.-free-beer-really-mean/) and [open source](https://opensource.com/resources/what-open-source) developed passion project of [Doug Ayers](https://douglascayers.com).
+The report tests additionally require an Account named `dca_mass_action: MA Test Account` to
+exist in the target org, because they run with `SeeAllData = true` against a packaged report.
 
-If you've found value in my open source projects, please consider showing your support:
-  * ⭐️ [Star](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler) this project on GitHub
-  * 📣 [Tweet](https://twitter.com/intent/tweet/?url=https%3A%2F%2Fgithub.com%2Fsfdx-mass-action-scheduler%2Fsfdx-mass-action-scheduler&text=%F0%9F%9A%80%20Declaratively%20schedule%20Process%20Builder%2C%20Flows%2C%20Quick%20Actions%2C%20Email%20Alerts%2C%20Workflow%20Rules%2C%20or%20Apex%20to%20process%20records%20from%20Reports%2C%20List%20Views%2C%20SOQL%2C%20or%20Apex%20with%20%23MassActionScheduler%20by%20%40DouglasCAyers&related=douglascayers%2Csalesforcedevs&hashtags=salesforce) this project to your followers
-  * Contribute a ☕️ or 🌮 via my [virtual tip jar on PayPal](https://www.paypal.me/douglascayers/)
+---
 
-Thank you! ❤️
+## Cutover from the managed package
 
-https://douglascayers.com/thanks-for-your-support/
+Generic outline. Adapt per org, and read the migration-tooling note above first.
 
-## 🙏 Contributing
+1. **Inventory** the existing `dca_mass_action__Mass_Action_Configuration__c` records in the
+   target org, with their field mappings and schedules.
+2. **Deactivate** the managed package's scheduled jobs so both copies cannot run the same
+   automation concurrently.
+3. **Deploy this source** to the target org and assign `Mass_Action_Admin`.
+4. **Create** the Named Credential, Auth. Provider, and Connected App via the setup wizard.
+5. **Re-create** each configuration and its field mappings in the un-namespaced objects.
+   This is manual today. Watch for Flow targets that relied on the Named Credential identity
+   — they now run as the batch job's running user.
+6. **Verify** one configuration end to end with `Active__c = false`, running it on demand
+   before scheduling it.
+7. **Activate** the new schedules, then **uninstall** the managed package once the fork has
+   run cleanly for a full cycle.
 
-Contributions are what make the open source community such an amazing place to learn, inspire, and create. Any contributions you make are **greatly appreciated**.
+Keep the managed package installed but idle until cutover is confirmed. Uninstalling it
+deletes its configuration records.
 
-Please see the [guidelines for contributing](CONTRIBUTING.md) for more details.
+---
 
-For documentation contributions (the [wiki](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki)), please [open an issue](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/issues) with your suggested changes.
+## Development
 
-For code contributions, please follow the [GitHub flow](https://help.github.com/en/articles/github-flow):
-1. Fork this project and [install the source code](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Install-Source-Code).
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
-4. Push to your feature branch (`git push origin feature/AmazingFeature`).
-5. Open a pull request to the `develop` branch.
+Conventions for this repository — naming, file headers, Apex standards, permission-set and
+layout requirements, and the test-suite rules — are documented in [CLAUDE.md](CLAUDE.md).
 
-## ✍️ Authors
+Branch off `develop` for feature work and open pull requests back to `develop`.
 
-[Doug Ayers](https://douglascayers.com) develops and maintains the project.
+---
 
-See also the list of [contributors](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/contributors) who participated in this project.
+## Attribution and license
 
-## 🎉 Acknowledgements
+Mass Action Scheduler is a
+[free-as-in-speech](https://www.howtogeek.com/howto/31717/what-do-the-phrases-free-speech-vs.-free-beer-really-mean/)
+and [open source](https://opensource.com/resources/what-open-source) passion project
+developed by [Doug Ayers](https://douglascayers.com). This fork exists only because of his
+work, and remains his code with local modifications layered on top.
 
-[Appiphony](http://www.lightningstrike.io) for developing the Strike Wizard component based on Lightning Design System [Path blueprint](https://www.lightningdesignsystem.com/components/path/).
+- Upstream project:
+  [sfdx-mass-action-scheduler/sfdx-mass-action-scheduler](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler)
+- Upstream documentation:
+  [project wiki](https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki)
 
-[Salesforce Foundation](https://github.com/SalesforceFoundation/CampaignTools) for developing tools for querying Salesforce Reports API in Apex.
+The source code is licensed under the [BSD 3-Clause License](LICENSE), copyright (c)
+2017-2023 Doug Ayers, douglascayers.com. Files inherited from upstream retain Doug's header
+and the BSD 3-Clause notice; local modifications are recorded in a Modification Log beneath
+his header. Some files carry third-party attribution instead — for example `MA_ReportService`
+is Salesforce.org (CampaignTools) code under its own notice. Existing attribution is never
+removed.
 
-[Shinichi Tomita](https://twitter.com/stomita) for developing [jsforce](https://jsforce.github.io/) and [soql-parse](https://github.com/stomita/soql-parse) libraries for easy use of Salesforce REST APIs in JavaScript.
+### Acknowledgements
 
-[jQuery](https://jquery.com/) for developing jQuery library.
+[Appiphony](http://www.lightningstrike.io) for the Strike Wizard component based on the
+Lightning Design System [Path blueprint](https://www.lightningdesignsystem.com/components/path/).
 
-[Aaron Hardy](https://twitter.com/aaronius) for developing [Penpal](https://github.com/Aaronius/penpal), a promise-based library for securely communicating with iframes via postMessage.
+[Salesforce Foundation](https://github.com/SalesforceFoundation/CampaignTools) for tools to
+query the Salesforce Reports API in Apex.
 
-## 👀 License
+[Shinichi Tomita](https://twitter.com/stomita) for [jsforce](https://jsforce.github.io/) and
+[soql-parse](https://github.com/stomita/soql-parse).
 
-The source code is licensed under the [BSD 3-Clause License](LICENSE).
+[jQuery](https://jquery.com/) for the jQuery library.
 
-<!-- MARKDOWN LINKS & IMAGES -->
+[Aaron Hardy](https://twitter.com/aaronius) for [Penpal](https://github.com/Aaronius/penpal),
+a promise-based library for securely communicating with iframes via postMessage.
 
-[version-shield]: https://img.shields.io/github/tag/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler.svg?label=release&color=green
-[version-url]: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/wiki/Release-Notes
-
-[license-shield]: https://img.shields.io/github/license/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler.svg?label=license&color=green
-[license-url]: LICENSE
-
-[community-shield]: https://img.shields.io/badge/-Join_our_Community-blue.svg?logo=salesforce&logoColor=white
-[community-url]: https://success.salesforce.com/_ui/core/chatter/groups/GroupProfilePage?g=0F93A000000LhvN
-
-[cicd-shield]: https://img.shields.io/github/workflow/status/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/CI?logo=github
-[cicd-url]: https://circleci.com/gh/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
-
-[codecov-shield]: https://img.shields.io/codecov/c/github/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler.svg?logo=codecov
-[codecov-url]: https://codecov.io/gh/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
-
-<!-- https://stackoverflow.com/questions/42679712/why-does-the-red-heart-emoji-require-two-code-points-but-the-other-colored-hear -->
-[sponsor-shield]: https://img.shields.io/badge/-💜_Sponsor_this_project-ff69b4.svg
-[sponsor-url]: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler/blob/master/README.md#-sponsoring
+Third-party library licenses are in [licenses/](licenses/).

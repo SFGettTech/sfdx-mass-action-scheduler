@@ -1,4 +1,5 @@
 {
+  "name": "sfdx-mass-action-scheduler",
   "packageDirectories": [
     {
       "path": "force-app",
