@@ -40,10 +40,15 @@
  *                 Scope note: MAS configurations are few by design, so this runs
  *                 synchronously. If an org held an unusually large number of records,
  *                 wrap the write phase in a Batchable.
- * Version       : 1.0
+ * Version       : 1.1
  * Modification Log:
  * Ver  | Date       | Author        | Modification
  * 1.0  | 2026-08-03 | Josh Gettman  | Initial version
+ * 1.1  | 2026-08-03 | Josh Gettman  | ManagedPackageReader treats a blank namespace as
+ *      |            |               | "no prefix" so the field-intersection logic can be
+ *      |            |               | covered by tests without the managed package
+ *      |            |               | installed. migrate() still rejects a blank
+ *      |            |               | namespace, so production behaviour is unchanged.
  */
 public without sharing class toolMassActionMigration {
 
@@ -248,7 +253,12 @@ public without sharing class toolMassActionMigration {
 
         public List<ManagedConfig> readManagedConfigs( String managedNamespace ) {
 
-            String ns = managedNamespace + '__';
+            // A blank namespace means "no prefix", which makes this reader read the
+            // un-namespaced objects directly. migrate() rejects a blank namespace before it
+            // can ever reach here, so in production `ns` is always the managed prefix. The
+            // blank form exists so the field-intersection logic below can be exercised by
+            // tests in an org where the managed package is not, and cannot be, installed.
+            String ns = ( String.isBlank( managedNamespace ) ? '' : managedNamespace + '__' );
 
             SObjectType managedConfigType = Schema.getGlobalDescribe().get( ns + CONFIG_OBJECT );
             SObjectType managedMappingType = Schema.getGlobalDescribe().get( ns + MAPPING_OBJECT );
