@@ -32,4 +32,5 @@
     <testClassName>MA_UpgradeMassActionLogsBatchableTest</testClassName>
     <testClassName>MA_UpgradePageLayoutsServiceTest</testClassName>
     <testClassName>MA_XMLUtilsTest</testClassName>
+    <testClassName>toolMassActionFlowInvokerTEST</testClassName>
 </ApexTestSuite>

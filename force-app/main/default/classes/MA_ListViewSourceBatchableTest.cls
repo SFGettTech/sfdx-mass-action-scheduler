@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Flow targets now run in-transaction via toolMassActionFlowInvoker.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Stub the flow runner in the Flow target test;
+ *     |            |              | the HTTP mock no longer covers that path.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class MA_ListViewSourceBatchableTest {
 
@@ -48,6 +62,12 @@ private class MA_ListViewSourceBatchableTest {
         config.Target_Type__c = 'Flow';
         config.Target_Action_Name__c = 'Test_Flow';
         config.Target_SObject_Type__c = null;
+
+        // The Flow target is now invoked in-transaction rather than through the REST
+        // Actions API, so the HTTP callout mock used by test_batchable cannot cover it and
+        // there is no real 'Test_Flow' in the org. Install a flow runner stub so this test
+        // still asserts that a Flow-target batch run completes without errors.
+        toolMassActionFlowInvoker.runner = new toolMassActionFlowRunnerMock();
 
         test_batchable( config );
 

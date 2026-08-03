@@ -17,6 +17,16 @@
  * 1.0 | 2026-08-03 | Josh Gettman | Bumped hardcoded REST and SOAP API path
  *     |            |              | constants from 54.0 to 67.0.
  * ---------------------------------------------------------------------------
+ * 1.1 | 2026-08-03 | Josh Gettman | invokeTargetAction now routes Target_Type__c
+ *     |            |              | 'Flow' to toolMassActionFlowInvoker, which
+ *     |            |              | runs the flow in-transaction via
+ *     |            |              | Invocable.Action instead of the REST Actions
+ *     |            |              | API, so the flow can make its own HTTP
+ *     |            |              | callouts. Consequence: flows now run as the
+ *     |            |              | batch job's running user, NOT as the Named
+ *     |            |              | Credential identity. Workflow, QuickAction,
+ *     |            |              | EmailAlert, and Apex are unchanged.
+ * ---------------------------------------------------------------------------
  */
 /*
  * Most code coverage comes from MA_EditConfigRestControllerTest
@@ -293,8 +303,23 @@ public inherited sharing class MA_MassActionUtils {
 
             List<Map<String, Object>> targetRowMaps = MA_MassActionUtils.buildActionInputs( sourceRowMaps, config.Mass_Action_Mappings__r );
 
-            String baseUrl = MA_MassActionUtils.getCalloutRestEndpointURL( config.Named_Credential__c );
-            MA_MassActionUtils.invokeAction( baseUrl, config, targetRowMaps );
+            if ( config.Target_Type__c == 'Flow' ) {
+
+                // Flows are invoked in-transaction rather than through the REST Actions API.
+                // A flow reached over the Actions API runs inside a callout and therefore
+                // cannot perform HTTP callouts of its own; running it in-transaction can.
+                // Note this means the flow runs as the batch job's running user, not as the
+                // identity configured on the Named Credential.
+                toolMassActionFlowInvoker.invokeFlow( config.Target_Action_Name__c, targetRowMaps );
+
+            } else {
+
+                // Workflow, QuickAction, EmailAlert, and invocable Apex keep using the
+                // REST Actions API via the configured Named Credential.
+                String baseUrl = MA_MassActionUtils.getCalloutRestEndpointURL( config.Named_Credential__c );
+                MA_MassActionUtils.invokeAction( baseUrl, config, targetRowMaps );
+
+            }
 
         }
 
