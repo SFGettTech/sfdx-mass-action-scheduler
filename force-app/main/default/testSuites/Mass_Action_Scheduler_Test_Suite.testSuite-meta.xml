@@ -33,4 +33,5 @@
     <testClassName>MA_UpgradePageLayoutsServiceTest</testClassName>
     <testClassName>MA_XMLUtilsTest</testClassName>
     <testClassName>toolMassActionFlowInvokerTEST</testClassName>
+    <testClassName>toolMassActionMigrationTEST</testClassName>
 </ApexTestSuite>
