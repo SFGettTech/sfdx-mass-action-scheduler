@@ -12,8 +12,16 @@
                 <field>Mass_Action_Configuration__c</field>
             </layoutItems>
             <layoutItems>
-                <behavior>Required</behavior>
+                <behavior>Edit</behavior>
+                <field>Mapping_Type__c</field>
+            </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
                 <field>Source_Field_Name__c</field>
+            </layoutItems>
+            <layoutItems>
+                <behavior>Edit</behavior>
+                <field>Source_Value__c</field>
             </layoutItems>
             <layoutItems>
                 <behavior>Required</behavior>
@@ -54,7 +62,9 @@
     </layoutSections>
     <miniLayout>
         <fields>Mass_Action_Configuration__c</fields>
+        <fields>Mapping_Type__c</fields>
         <fields>Source_Field_Name__c</fields>
+        <fields>Source_Value__c</fields>
         <fields>Target_Field_Name__c</fields>
     </miniLayout>
     <showEmailCheckbox>false</showEmailCheckbox>

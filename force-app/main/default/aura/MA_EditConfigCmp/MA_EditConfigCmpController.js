@@ -4,6 +4,20 @@ Website: https://douglascayers.com
 GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
 License: BSD 3-Clause License
  */
+/*
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Static (hard-coded) field mappings.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target field
+ *     |            |              | use a source field or a static value.
+ * ---------------------------------------------------------------------------
+ */
 ({
     onInit : function( component, event, helper ) {
 
@@ -201,15 +215,28 @@ License: BSD 3-Clause License
 
             } else if ( currentStageIndex === 3 ) {         // Field Mappings
 
-                var inputSourceFieldNames = component.find( 'inputMappingSourceFieldName' );
+                // Only one of the source field input and the static value input is rendered
+                // per row, so collecting both only ever yields the inputs on screen. A row
+                // set to Static Value contributes its static value input instead of its
+                // source field input, which is how a required target field can be satisfied
+                // by either one.
+                [ 'inputMappingSourceFieldName', 'inputMappingSourceValue' ].forEach( function( auraId ) {
 
-                if ( $A.util.isArray( inputSourceFieldNames ) ) {
-                    for ( var i = 0; i < inputSourceFieldNames.length; i++ ) {
-                        inputCmps.push( inputSourceFieldNames[i] );
+                    var foundCmps = component.find( auraId );
+
+                    if ( $A.util.isUndefinedOrNull( foundCmps ) ) {
+                        return;
                     }
-                } else {
-                    inputCmps.push( inputSourceFieldNames );
-                }
+
+                    if ( $A.util.isArray( foundCmps ) ) {
+                        for ( var i = 0; i < foundCmps.length; i++ ) {
+                            inputCmps.push( foundCmps[i] );
+                        }
+                    } else {
+                        inputCmps.push( foundCmps );
+                    }
+
+                });
 
             }
 
@@ -484,6 +511,21 @@ License: BSD 3-Clause License
         }
 
         helper.renderTargetSobjectTypes( component );
+
+    },
+
+    /**
+     * Switching a target field between "Source Field" and "Static Value" clears whichever
+     * of the two values no longer applies, so that a value left over from the other mode is
+     * not silently saved onto the Mass_Action_Mapping__c record.
+     */
+    handleMappingTypeChange : function( component, event, helper ) {
+
+        if ( component.get( 'v.didInitConfig' ) !== true ) {
+            return;
+        }
+
+        helper.clearUnusedMappingValues( component );
 
     }
 

@@ -4,6 +4,21 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Static (hard-coded) field mappings.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | FieldMappingWrapper carries mappingType and
+ *     |            |              | sourceValue so the UI can round-trip static
+ *     |            |              | value mappings.
+ * ---------------------------------------------------------------------------
+ */
 /*
  * To simplify efforts to have one code base that can be open source
  * and in a managed package, and the code not have to know about any
@@ -221,14 +236,33 @@ public inherited sharing class MA_MassActionConfigWrapper {
 
     public inherited sharing class FieldMappingWrapper {
 
+        /**
+         * Either 'Source Field' or 'Static Value'. Blank on mappings created before
+         * Mapping_Type__c existed, which the UI and Apex both treat as 'Source Field'.
+         */
+        @AuraEnabled
+        public String mappingType { get; set; }
+
         @AuraEnabled
         public String sourceFieldName { get; set; }
+
+        /**
+         * Hard-coded literal used when mappingType is 'Static Value'.
+         */
+        @AuraEnabled
+        public String sourceValue { get; set; }
 
         @AuraEnabled
         public String targetFieldName { get; set; }
 
         public FieldMappingWrapper( Mass_Action_Mapping__c mapping ) {
+            this.mappingType = (
+                String.isBlank( mapping.Mapping_Type__c )
+                    ? MA_MassActionUtils.MAPPING_TYPE_SOURCE_FIELD
+                    : mapping.Mapping_Type__c
+            );
             this.sourceFieldName = mapping.Source_Field_Name__c;
+            this.sourceValue = mapping.Source_Value__c;
             this.targetFieldName = mapping.Target_Field_Name__c;
         }
 

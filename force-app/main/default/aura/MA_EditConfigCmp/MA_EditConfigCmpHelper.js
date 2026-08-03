@@ -4,6 +4,20 @@ Website: https://douglascayers.com
 GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
 License: BSD 3-Clause License
  */
+/*
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Static (hard-coded) field mappings.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target field
+ *     |            |              | use a source field or a static value.
+ * ---------------------------------------------------------------------------
+ */
 ({
     initScheduleOptions : function( component ) {
 
@@ -676,7 +690,12 @@ License: BSD 3-Clause License
 
                     if ( !ignoreDataTypes.includes( targetField.dataType ) ) {
 
-                        var recordFieldMapping = { 'sourceFieldName' : null, 'targetFieldName' : null };
+                        var recordFieldMapping = {
+                            'mappingType' : null,
+                            'sourceFieldName' : null,
+                            'sourceValue' : null,
+                            'targetFieldName' : null
+                        };
 
                         // find existing mapping for this target field, if any exists
                         for ( var j = 0; j < recordFieldMappings.length; j++ ) {
@@ -688,7 +707,11 @@ License: BSD 3-Clause License
 
                         targetFieldMappings.push({
                             'targetField' : targetField,
-                            'sourceFieldName' : recordFieldMapping.sourceFieldName
+                            // default to Source Field so an unmapped target field, and any
+                            // mapping saved before Mapping_Type__c existed, behaves as before
+                            'mappingType' : ( recordFieldMapping.mappingType || 'Source Field' ),
+                            'sourceFieldName' : recordFieldMapping.sourceFieldName,
+                            'sourceValue' : recordFieldMapping.sourceValue
                         });
 
                     }
@@ -709,6 +732,34 @@ License: BSD 3-Clause License
      * Given an array of aura components representing inputs (have a v.value attribute)
      * then returns a validation result object with any errors for each component.
      */
+    /**
+     * For each target field mapping, clears whichever of sourceFieldName or sourceValue
+     * does not apply to the currently selected mapping type. Called when the admin toggles
+     * a row between "Source Field" and "Static Value" so a leftover value from the other
+     * mode is not carried into the saved Mass_Action_Mapping__c record.
+     */
+    clearUnusedMappingValues : function( component ) {
+
+        var targetFieldMappings = component.get( 'v.targetFieldMappings' );
+
+        if ( $A.util.isUndefinedOrNull( targetFieldMappings ) ) {
+            return;
+        }
+
+        targetFieldMappings.forEach( function( item ) {
+            if ( item.mappingType === 'Static Value' ) {
+                item.sourceFieldName = null;
+            } else {
+                item.sourceValue = null;
+            }
+        });
+
+        component.set( 'v.targetFieldMappings', targetFieldMappings );
+
+    },
+
+    // ----------------------------------------------------------------------------------
+
     validateInputsAsync : function( component, inputCmps ) {
 
         var helper = this;
@@ -887,6 +938,17 @@ License: BSD 3-Clause License
                         });
                         break;
 
+                    // A required target field is satisfied by EITHER a chosen source field
+                    // OR a non-blank static value. Only one of the two inputs is rendered per
+                    // row, and each carries the target field's own required flag, so checking
+                    // whichever input is on screen enforces exactly that rule.
+                    case 'inputMappingSourceValue':
+                        inputValidityAsync = Promise.resolve({
+                            'invalid': ( ( inputIsEmpty && inputCmp.get( 'v.required' ) ) || inputIsInvalid ),
+                            'messageWhenInvalid': messageWhenValueMissing
+                        });
+                        break;
+
                     // Schedule
 
                     case 'inputScheduleFrequency':
@@ -1055,9 +1117,24 @@ License: BSD 3-Clause License
         // because source fields can be mapped to multiple target fields
         // but a target field can only have one mapping then we build up a map
         // of target fields to their source field
+        //
+        // A source field mapping is still sent as a bare string, exactly as before this
+        // component supported static values, so the payload for a configuration that uses
+        // no static values is unchanged. Only a static value mapping sends the richer
+        // object. MA_MassActionUtils.saveConfiguration accepts both shapes.
         var targetFieldMappings = {};
         component.get( 'v.targetFieldMappings' ).forEach( function( item ) {
-            targetFieldMappings[item.targetField.name] = item.sourceFieldName;
+
+            if ( item.mappingType === 'Static Value' ) {
+                targetFieldMappings[item.targetField.name] = {
+                    'mappingType' : 'Static Value',
+                    'sourceFieldName' : null,
+                    'sourceValue' : item.sourceValue
+                };
+            } else {
+                targetFieldMappings[item.targetField.name] = item.sourceFieldName;
+            }
+
         });
 
         /*

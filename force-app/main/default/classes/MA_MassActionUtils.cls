@@ -27,6 +27,15 @@
  *     |            |              | Credential identity. Workflow, QuickAction,
  *     |            |              | EmailAlert, and Apex are unchanged.
  * ---------------------------------------------------------------------------
+ * 1.2 | 2026-08-03 | Josh Gettman | Added static (hard-coded) field mappings.
+ *     |            |              | buildActionInputs assigns Source_Value__c
+ *     |            |              | directly when Mapping_Type__c is 'Static
+ *     |            |              | Value', with no source field existence check;
+ *     |            |              | blank Mapping_Type__c is treated as 'Source
+ *     |            |              | Field' so legacy mappings are unchanged.
+ *     |            |              | saveConfiguration now accepts both the legacy
+ *     |            |              | string and an extended object per mapping.
+ * ---------------------------------------------------------------------------
  */
 /*
  * Most code coverage comes from MA_EditConfigRestControllerTest
@@ -39,6 +48,12 @@ public inherited sharing class MA_MassActionUtils {
 
     public static final String REST_API_SERVICES_URL = ORG_DOMAIN_URL + REST_API_PATH;
     public static final String SOAP_API_SERVICES_URL = ORG_DOMAIN_URL + SOAP_API_PATH;
+
+    // Mass_Action_Mapping__c.Mapping_Type__c picklist values.
+    // A blank Mapping_Type__c, which is what mappings created before that field existed
+    // have, is treated everywhere as MAPPING_TYPE_SOURCE_FIELD.
+    public static final String MAPPING_TYPE_SOURCE_FIELD = 'Source Field';
+    public static final String MAPPING_TYPE_STATIC_VALUE = 'Static Value';
 
     // ------------------------------------------------------------------------
 
@@ -124,7 +139,9 @@ public inherited sharing class MA_MassActionUtils {
                 (
                     SELECT
                         Id,
+                        Mapping_Type__c,
                         Source_Field_Name__c,
+                        Source_Value__c,
                         Target_Field_Name__c
                     FROM
                         Mass_Action_Mappings__r
@@ -157,7 +174,16 @@ public inherited sharing class MA_MassActionUtils {
         Map<String, Object> result = new Map<String, Object>();
 
         MA_MassActionConfigWrapper wrapper = (MA_MassActionConfigWrapper) JSON.deserializeStrict( wrapperJson, MA_MassActionConfigWrapper.class );
-        Map<String, String> fieldMappings = (Map<String, String>) JSON.deserializeStrict( fieldMappingsJson, Map<String, String>.class );
+
+        // Two shapes are accepted for each entry so that static value mappings could be
+        // added without breaking any existing caller:
+        //   "TargetField" : "SourceField"                                  (legacy, source field)
+        //   "TargetField" : { "mappingType" : "...",                       (extended)
+        //                     "sourceFieldName" : "...",
+        //                     "sourceValue" : "..." }
+        // The UI only sends the extended shape for static value mappings, so the payload for
+        // a configuration that uses no static values is byte-for-byte what it was before.
+        Map<String, Object> fieldMappings = (Map<String, Object>) JSON.deserializeUntyped( fieldMappingsJson );
 
         System.debug( 'MA_MassActionUtils.saveConfiguration: wrapper=\n' + wrapper );
         System.debug( 'MA_MassActionUtils.saveConfiguration: fieldMappings=\n' + fieldMappings );
@@ -170,16 +196,10 @@ public inherited sharing class MA_MassActionUtils {
         List<Mass_Action_Mapping__c> configMappings = new List<Mass_Action_Mapping__c>();
         for ( String targetFieldName : fieldMappings.keySet() ) {
 
-            // if a target field is not required for the chosen action
-            // then ignore it if there is no source field selected
-            String sourceFieldName = fieldMappings.get( targetFieldName );
+            Mass_Action_Mapping__c configMapping = buildConfigMapping( config.Id, targetFieldName, fieldMappings.get( targetFieldName ) );
 
-            if ( String.isNotBlank( sourceFieldName ) ) {
-                configMappings.add( new Mass_Action_Mapping__c(
-                    Mass_Action_Configuration__c = config.Id,
-                    Source_Field_Name__c = sourceFieldName,
-                    Target_Field_Name__c = targetFieldName
-                ));
+            if ( configMapping != null ) {
+                configMappings.add( configMapping );
             }
 
         }
@@ -190,6 +210,88 @@ public inherited sharing class MA_MassActionUtils {
         result.put( 'recordId', config.Id );
 
         return result;
+    }
+
+    /**
+     * Builds the Mass_Action_Mapping__c record for one entry of the field mappings payload,
+     * accepting either the legacy string shape or the extended object shape.
+     *
+     * @param configId
+     *      Parent Mass_Action_Configuration__c id.
+     * @param targetFieldName
+     *      Target action or flow input this entry maps to.
+     * @param mappingValue
+     *      Either a String source field name, or a Map with 'mappingType',
+     *      'sourceFieldName', and 'sourceValue' keys.
+     *
+     * @return The mapping record to insert, or null when the entry carries no value and
+     *      should be skipped. A target field that is not required for the chosen action is
+     *      left unmapped rather than stored empty, which is the behaviour that existed for
+     *      source field mappings and is kept for static values.
+     */
+    @TestVisible
+    private static Mass_Action_Mapping__c buildConfigMapping( ID configId, String targetFieldName, Object mappingValue ) {
+
+        if ( mappingValue == null ) {
+            return null;
+        }
+
+        String mappingType = MAPPING_TYPE_SOURCE_FIELD;
+        String sourceFieldName = null;
+        String sourceValue = null;
+
+        if ( mappingValue instanceof Map<String, Object> ) {
+
+            Map<String, Object> mappingMap = (Map<String, Object>) mappingValue;
+
+            Object rawMappingType = mappingMap.get( 'mappingType' );
+            Object rawSourceFieldName = mappingMap.get( 'sourceFieldName' );
+            Object rawSourceValue = mappingMap.get( 'sourceValue' );
+
+            if ( rawMappingType != null && String.isNotBlank( String.valueOf( rawMappingType ) ) ) {
+                mappingType = String.valueOf( rawMappingType );
+            }
+
+            sourceFieldName = ( rawSourceFieldName == null ? null : String.valueOf( rawSourceFieldName ) );
+            sourceValue = ( rawSourceValue == null ? null : String.valueOf( rawSourceValue ) );
+
+        } else {
+
+            // legacy shape: the value is the source field name itself
+            sourceFieldName = String.valueOf( mappingValue );
+
+        }
+
+        if ( MAPPING_TYPE_STATIC_VALUE.equalsIgnoreCase( mappingType ) ) {
+
+            if ( String.isBlank( sourceValue ) ) {
+                return null;
+            }
+
+            return new Mass_Action_Mapping__c(
+                Mass_Action_Configuration__c = configId,
+                Mapping_Type__c = MAPPING_TYPE_STATIC_VALUE,
+                Source_Field_Name__c = null,
+                Source_Value__c = sourceValue,
+                Target_Field_Name__c = targetFieldName
+            );
+
+        }
+
+        // if a target field is not required for the chosen action
+        // then ignore it if there is no source field selected
+        if ( String.isBlank( sourceFieldName ) ) {
+            return null;
+        }
+
+        return new Mass_Action_Mapping__c(
+            Mass_Action_Configuration__c = configId,
+            Mapping_Type__c = MAPPING_TYPE_SOURCE_FIELD,
+            Source_Field_Name__c = sourceFieldName,
+            Source_Value__c = null,
+            Target_Field_Name__c = targetFieldName
+        );
+
     }
 
     // ------------------------------------------------------------------------
@@ -258,6 +360,28 @@ public inherited sharing class MA_MassActionUtils {
             Map<String, Object> targetRow = new Map<String, Object>();
 
             for ( Mass_Action_Mapping__c mapping : mappings ) {
+
+                // A static value mapping has no source field at all, so it is assigned
+                // directly and deliberately skips the source field existence check below.
+                //
+                // Experimental: Source_Value__c is a text field, but the target flow or
+                // action input may be typed as Number, Boolean, Date, and so on.
+                // Invocable.Action.setInvocationParameter and the REST Actions API may
+                // reject a String for such an input. The literal is passed through exactly
+                // as the admin entered it; no type coercion is attempted. This has not been
+                // verified against typed inputs.
+                if ( MAPPING_TYPE_STATIC_VALUE.equalsIgnoreCase( mapping.Mapping_Type__c ) ) {
+                    targetRow.put( mapping.Target_Field_Name__c, mapping.Source_Value__c );
+                    continue;
+                }
+
+                // Source field mapping. A blank Mapping_Type__c means a mapping created
+                // before Mapping_Type__c existed, which is a source field mapping.
+                // Source_Field_Name__c is no longer required at the field level, so guard
+                // against a blank one rather than letting toLowerCase() throw.
+                if ( String.isBlank( mapping.Source_Field_Name__c ) ) {
+                    throw new MA_Exceptions.NoSourceFieldException( sourceRow, mapping.Source_Field_Name__c );
+                }
 
                 if ( !sourceRowLowerCaseKeyMap.containsKey( mapping.Source_Field_Name__c.toLowerCase() ) ) {
                     throw new MA_Exceptions.NoSourceFieldException( sourceRow, mapping.Source_Field_Name__c );

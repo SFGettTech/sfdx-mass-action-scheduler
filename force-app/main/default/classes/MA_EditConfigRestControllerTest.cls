@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Static (hard-coded) field mappings.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Added buildActionInputs and saveConfiguration
+ *     |            |              | coverage for static value mappings.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class MA_EditConfigRestControllerTest {
 
@@ -896,6 +910,236 @@ private class MA_EditConfigRestControllerTest {
         }
 
         Test.stopTest();
+
+    }
+
+    // --------------------------------------------------------------------------
+    // Static (hard-coded) field mappings
+    // --------------------------------------------------------------------------
+
+    /**
+     * A static value mapping assigns its literal with no source field involved, so the
+     * source row does not need to contain anything for that target field and no
+     * NoSourceFieldException is raised.
+     */
+    @IsTest
+    static void test_build_action_inputs_static_value_mapping() {
+
+        List<Mass_Action_Mapping__c> mappings = new List<Mass_Action_Mapping__c>{
+            new Mass_Action_Mapping__c(
+                Mapping_Type__c = 'Static Value',
+                Source_Field_Name__c = null,
+                Source_Value__c = 'HARD CODED',
+                Target_Field_Name__c = 'StaticInput'
+            )
+        };
+
+        // deliberately contains nothing that corresponds to the target field
+        List<Map<String, Object>> sourceRows = new List<Map<String, Object>>{
+            new Map<String, Object>{ 'Id' => '001000000000001' }
+        };
+
+        Test.startTest();
+
+        List<Map<String, Object>> targetRows = MA_MassActionUtils.buildActionInputs( sourceRows, mappings );
+
+        Test.stopTest();
+
+        System.assertEquals( 1, targetRows.size() );
+        System.assertEquals( 1, targetRows[0].size(), 'only the static mapping should produce a key' );
+        System.assertEquals( true, targetRows[0].containsKey( 'StaticInput' ) );
+        System.assertEquals( 'HARD CODED', targetRows[0].get( 'StaticInput' ) );
+
+    }
+
+    /**
+     * A configuration may mix both kinds of mapping. The source field mapping still reads
+     * from the source row and the static mapping still contributes its literal.
+     */
+    @IsTest
+    static void test_build_action_inputs_mixed_mappings() {
+
+        List<Mass_Action_Mapping__c> mappings = new List<Mass_Action_Mapping__c>{
+            new Mass_Action_Mapping__c(
+                Mapping_Type__c = 'Source Field',
+                Source_Field_Name__c = 'Id',
+                Source_Value__c = null,
+                Target_Field_Name__c = 'ContextId'
+            ),
+            new Mass_Action_Mapping__c(
+                Mapping_Type__c = 'Static Value',
+                Source_Field_Name__c = null,
+                Source_Value__c = 'Nightly Batch',
+                Target_Field_Name__c = 'RunLabel'
+            )
+        };
+
+        List<Map<String, Object>> sourceRows = new List<Map<String, Object>>{
+            new Map<String, Object>{ 'Id' => '001000000000001' },
+            new Map<String, Object>{ 'Id' => '001000000000002' }
+        };
+
+        Test.startTest();
+
+        List<Map<String, Object>> targetRows = MA_MassActionUtils.buildActionInputs( sourceRows, mappings );
+
+        Test.stopTest();
+
+        System.assertEquals( 2, targetRows.size() );
+
+        System.assertEquals( 2, targetRows[0].size() );
+        System.assertEquals( '001000000000001', targetRows[0].get( 'ContextId' ) );
+        System.assertEquals( 'Nightly Batch', targetRows[0].get( 'RunLabel' ) );
+
+        // the static literal is repeated for every row, the source value varies
+        System.assertEquals( '001000000000002', targetRows[1].get( 'ContextId' ) );
+        System.assertEquals( 'Nightly Batch', targetRows[1].get( 'RunLabel' ) );
+
+    }
+
+    /**
+     * Mappings created before Mapping_Type__c existed have it blank. They must keep
+     * behaving as source field mappings, including raising NoSourceFieldException when the
+     * source row has no such field.
+     */
+    @IsTest
+    static void test_build_action_inputs_blank_mapping_type_is_source_field() {
+
+        List<Mass_Action_Mapping__c> mappings = new List<Mass_Action_Mapping__c>{
+            new Mass_Action_Mapping__c(
+                Mapping_Type__c = null,
+                Source_Field_Name__c = 'Id',
+                Target_Field_Name__c = 'ContextId'
+            )
+        };
+
+        Test.startTest();
+
+        // present in the source row, behaves as before
+        List<Map<String, Object>> targetRows = MA_MassActionUtils.buildActionInputs(
+            new List<Map<String, Object>>{ new Map<String, Object>{ 'Id' => '001000000000001' } },
+            mappings
+        );
+
+        System.assertEquals( '001000000000001', targetRows[0].get( 'ContextId' ) );
+
+        // absent from the source row, still raises
+        Boolean thrown = false;
+
+        try {
+            MA_MassActionUtils.buildActionInputs(
+                new List<Map<String, Object>>{ new Map<String, Object>{ 'SomeOtherField' => 'x' } },
+                mappings
+            );
+        } catch ( MA_Exceptions.NoSourceFieldException e ) {
+            thrown = true;
+        }
+
+        Test.stopTest();
+
+        System.assertEquals( true, thrown, 'a legacy mapping with a missing source field should still raise' );
+
+    }
+
+    /**
+     * Source_Field_Name__c is no longer required at the field level, so a source field
+     * mapping saved with it blank must raise rather than throw a NullPointerException.
+     */
+    @IsTest
+    static void test_build_action_inputs_blank_source_field_name_raises() {
+
+        List<Mass_Action_Mapping__c> mappings = new List<Mass_Action_Mapping__c>{
+            new Mass_Action_Mapping__c(
+                Mapping_Type__c = 'Source Field',
+                Source_Field_Name__c = null,
+                Target_Field_Name__c = 'ContextId'
+            )
+        };
+
+        Boolean thrown = false;
+
+        Test.startTest();
+
+        try {
+            MA_MassActionUtils.buildActionInputs(
+                new List<Map<String, Object>>{ new Map<String, Object>{ 'Id' => '001000000000001' } },
+                mappings
+            );
+        } catch ( MA_Exceptions.NoSourceFieldException e ) {
+            thrown = true;
+        }
+
+        Test.stopTest();
+
+        System.assertEquals( true, thrown, 'expected NoSourceFieldException, not a NullPointerException' );
+
+    }
+
+    /**
+     * The save payload accepts both the legacy string shape and the extended object shape,
+     * so a configuration mixing both persists the right Mass_Action_Mapping__c records.
+     */
+    @IsTest
+    static void test_save_configuration_with_static_value_mapping() {
+
+        MA_MassActionConfigWrapper wrapper = new MA_MassActionConfigWrapper();
+        wrapper.name = 'Test Config Static';
+        wrapper.developerName = 'Test_Config_Static';
+        wrapper.active = false;
+        wrapper.batchSize = 200;
+        wrapper.sourceType = 'SOQL';
+        wrapper.sourceSoqlQuery = 'SELECT Id FROM Account';
+        wrapper.targetType = 'Flow';
+        wrapper.targetActionName = 'Test_Flow';
+        wrapper.scheduleFrequency = 'Custom';
+        wrapper.scheduleCron = '0 0 1 * * ?';
+
+        // legacy string shape alongside the extended object shape
+        Map<String, Object> fieldMappings = new Map<String, Object>{
+            'ContextId' => 'Id',
+            'RunLabel' => new Map<String, Object>{
+                'mappingType' => 'Static Value',
+                'sourceFieldName' => null,
+                'sourceValue' => 'Nightly Batch'
+            },
+            // a static mapping with no literal is skipped, mirroring how an unmapped
+            // optional source field is skipped
+            'IgnoredInput' => new Map<String, Object>{
+                'mappingType' => 'Static Value',
+                'sourceFieldName' => null,
+                'sourceValue' => ''
+            }
+        };
+
+        Test.startTest();
+
+        Map<String, Object> result = MA_MassActionUtils.saveConfiguration(
+            JSON.serialize( wrapper ),
+            JSON.serialize( fieldMappings )
+        );
+
+        Test.stopTest();
+
+        System.assertEquals( true, result.get( 'success' ) );
+
+        Mass_Action_Configuration__c config = MA_MassActionUtils.getConfiguration( (ID) result.get( 'recordId' ) );
+
+        Map<String, Mass_Action_Mapping__c> mappingsByTarget = new Map<String, Mass_Action_Mapping__c>();
+        for ( Mass_Action_Mapping__c mapping : config.Mass_Action_Mappings__r ) {
+            mappingsByTarget.put( mapping.Target_Field_Name__c, mapping );
+        }
+
+        System.assertEquals( 2, mappingsByTarget.size(), 'the blank static value should not have been saved' );
+
+        Mass_Action_Mapping__c sourceFieldMapping = mappingsByTarget.get( 'ContextId' );
+        System.assertEquals( 'Source Field', sourceFieldMapping.Mapping_Type__c );
+        System.assertEquals( 'Id', sourceFieldMapping.Source_Field_Name__c );
+        System.assertEquals( null, sourceFieldMapping.Source_Value__c );
+
+        Mass_Action_Mapping__c staticMapping = mappingsByTarget.get( 'RunLabel' );
+        System.assertEquals( 'Static Value', staticMapping.Mapping_Type__c );
+        System.assertEquals( null, staticMapping.Source_Field_Name__c );
+        System.assertEquals( 'Nightly Batch', staticMapping.Source_Value__c );
 
     }
 

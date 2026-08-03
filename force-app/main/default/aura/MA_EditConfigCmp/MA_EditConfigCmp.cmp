@@ -4,6 +4,21 @@ Website: https://douglascayers.com
 GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
 License: BSD 3-Clause License
 -->
+<!--
+    Modified by:  Josh Gettman
+    Date:         2026-08-03
+    Description:  Static (hard-coded) field mappings.
+    Version:      1.0
+
+    Modification Log:
+    =======================================================================
+    Ver | Date       | Author       | Modification
+    =======================================================================
+    1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target
+        |            |              | field use a source field or a static
+        |            |              | value.
+    =======================================================================
+-->
 <aura:component controller="MA_EditConfigCmpController" implements="flexipage:availableForRecordHome,force:hasRecordId,lightning:actionOverride" access="global">
 
     <aura:attribute name="didInitConfig"
@@ -205,6 +220,14 @@ License: BSD 3-Clause License
     <aura:attribute name="targetFieldMappings"
                     type="Map[]"
                     description="Array of input arguments for target action to map source fields to."/>
+
+    <aura:attribute name="mappingTypes"
+                    type="Map[]"
+                    default="[
+                        { &quot;label&quot; : &quot;Source Field&quot;, &quot;value&quot; : &quot;Source Field&quot; },
+                        { &quot;label&quot; : &quot;Static Value&quot;, &quot;value&quot; : &quot;Static Value&quot; }
+                    ]"
+                    description="Whether a target field is populated from a source field or from a hard-coded static value. Mirrors Mass_Action_Mapping__c.Mapping_Type__c."/>
 
     <!-- Schedule Option Attributes -->
 
@@ -1054,42 +1077,79 @@ License: BSD 3-Clause License
                         <table class="slds-table slds-table_bordered">
                             <thead>
                                 <tr class="slds-text-title_caps">
-                                    <th scope="col">Source Field</th>
+                                    <th scope="col">Mapping Type</th>
+                                    <th scope="col">Source Field / Static Value</th>
                                     <th scope="col">Target Field</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <aura:iteration var="targetFieldMapping" items="{!v.targetFieldMappings}" indexVar="index">
                                     <tr>
-                                        <td width="50%">
+                                        <td width="20%">
 
-                                            <aura:if isTrue="{!equals( v.sourceFieldsInputType, 'text' )}">
+                                            <lightning:combobox aura:id="inputMappingType"
+                                                name="inputMappingType"
+                                                label="{!targetFieldMapping.targetField.label}"
+                                                variant="label-hidden"
+                                                value="{!targetFieldMapping.mappingType}"
+                                                options="{!v.mappingTypes}"
+                                                onchange="{!c.handleMappingTypeChange}"
+                                                required="true"/>
 
-                                                <lightning:input aura:id="inputMappingSourceFieldName"
-                                                    name="inputMappingSourceFieldName"
+                                        </td>
+                                        <td width="40%">
+
+                                            <!--
+                                                A static value mapping has no source field, so the
+                                                source field picker is replaced by a free text input
+                                                bound to the literal. Only one of these renders at a
+                                                time, so component.find() in the controller only ever
+                                                returns the inputs that are actually on screen.
+                                            -->
+                                            <aura:if isTrue="{!equals( targetFieldMapping.mappingType, 'Static Value' )}">
+
+                                                <lightning:input aura:id="inputMappingSourceValue"
+                                                    name="inputMappingSourceValue"
                                                     label="{!targetFieldMapping.targetField.label}"
                                                     variant="label-hidden"
-                                                    value="{!targetFieldMapping.sourceFieldName}"
-                                                    placeholder="Enter source field name"
+                                                    value="{!targetFieldMapping.sourceValue}"
+                                                    maxlength="255"
+                                                    placeholder="Enter a static value"
                                                     required="{!targetFieldMapping.targetField.required}"/>
 
-                                            </aura:if>
+                                                <aura:set attribute="else">
 
-                                            <aura:if isTrue="{!equals( v.sourceFieldsInputType, 'combobox' )}">
+                                                    <aura:if isTrue="{!equals( v.sourceFieldsInputType, 'text' )}">
 
-                                                <lightning:combobox aura:id="inputMappingSourceFieldName"
-                                                    name="inputMappingSourceFieldName"
-                                                    label="{!targetFieldMapping.targetField.label}"
-                                                    variant="label-hidden"
-                                                    value="{!targetFieldMapping.sourceFieldName}"
-                                                    options="{!v.sourceFields}"
-                                                    placeholder="Select a Field"
-                                                    required="{!targetFieldMapping.targetField.required}"/>
+                                                        <lightning:input aura:id="inputMappingSourceFieldName"
+                                                            name="inputMappingSourceFieldName"
+                                                            label="{!targetFieldMapping.targetField.label}"
+                                                            variant="label-hidden"
+                                                            value="{!targetFieldMapping.sourceFieldName}"
+                                                            placeholder="Enter source field name"
+                                                            required="{!targetFieldMapping.targetField.required}"/>
+
+                                                    </aura:if>
+
+                                                    <aura:if isTrue="{!equals( v.sourceFieldsInputType, 'combobox' )}">
+
+                                                        <lightning:combobox aura:id="inputMappingSourceFieldName"
+                                                            name="inputMappingSourceFieldName"
+                                                            label="{!targetFieldMapping.targetField.label}"
+                                                            variant="label-hidden"
+                                                            value="{!targetFieldMapping.sourceFieldName}"
+                                                            options="{!v.sourceFields}"
+                                                            placeholder="Select a Field"
+                                                            required="{!targetFieldMapping.targetField.required}"/>
+
+                                                    </aura:if>
+
+                                                </aura:set>
 
                                             </aura:if>
 
                                         </td>
-                                        <td width="50%">
+                                        <td width="40%">
 
                                             <aura:if isTrue="{!targetFieldMapping.targetField.required}">
 

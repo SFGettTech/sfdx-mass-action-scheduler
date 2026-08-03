@@ -492,6 +492,21 @@
         <field>Mass_Action_Log__c.Total_Batches__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Mass_Action_Mapping__c.Mapping_Type__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Mass_Action_Mapping__c.Source_Field_Name__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
+    <fieldPermissions>
+        <editable>true</editable>
+        <field>Mass_Action_Mapping__c.Source_Value__c</field>
+        <readable>true</readable>
+    </fieldPermissions>
     <hasActivationRequired>false</hasActivationRequired>
     <label>Mass Action Admin</label>
     <objectPermissions>
