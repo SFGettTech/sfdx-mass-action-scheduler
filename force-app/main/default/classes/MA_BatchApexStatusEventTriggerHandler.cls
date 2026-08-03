@@ -4,6 +4,21 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Ran log DML in system mode so the Automated
+ *     |            |              | Process user can set record types; added DML
+ *     |            |              | error aggregation.
+ * ---------------------------------------------------------------------------
+ */
 /*
  * This class explicitly uses 'without sharing' because it runs not as a real user
  * but rather as the Automated Process user, an entity we can't grant permissions to.
@@ -118,8 +133,22 @@ public without sharing class MA_BatchApexStatusEventTriggerHandler {
         Database.DMLOptions dmo = new Database.DMLOptions();
         dmo.allowFieldTruncation = true;
 
-        Database.insert( childLogsToInsertList, dmo );
-        Database.update( parentLogsToUpdateMap.values(), dmo );
+        // This handler runs as the Automated Process user, which cannot be granted a
+        // permission set and therefore has no record type visibility on Mass_Action_Log__c.
+        // That user context is now enforced on DML, so setting RecordTypeId to the
+        // 'Child_Log' / 'Parent_Log' record types fails with INVALID_CROSS_REFERENCE_KEY
+        // unless the DML runs in system mode. Verified by running identical code at
+        // API 54.0 (insert succeeds) and API 67.0 (insert fails) in the same org; the
+        // exact release that introduced the enforcement was not determined.
+        List<Database.SaveResult> insertResults = Database.insert( childLogsToInsertList, dmo, AccessLevel.SYSTEM_MODE );
+        List<Database.SaveResult> updateResults = Database.update( parentLogsToUpdateMap.values(), dmo, AccessLevel.SYSTEM_MODE );
+
+        // These DML calls run with partial success, so failures are silent unless we
+        // inspect the results. Aggregate and log them verbosely; we deliberately do not
+        // throw, because an uncaught exception in a platform event trigger causes the
+        // event batch to be retried and then discarded, losing the status events entirely.
+        logDmlErrors( 'insert child logs', childLogsToInsertList, insertResults );
+        logDmlErrors( 'update parent logs', parentLogsToUpdateMap.values(), updateResults );
 
         // When the trigger stops its flow of execution, either intentionally or because of an unhandled exception,
         // such as a limit exception, it fires again with a new batch (the sObject list in Trigger.New).
@@ -129,6 +158,42 @@ public without sharing class MA_BatchApexStatusEventTriggerHandler {
         if ( String.isNotBlank( lastEventReplayId ) ) {
             System.debug( 'MA_BatchApexStatusEventTriggerHandler.handleAfterInsert: setting resume checkpoint: lastEventReplayId=' + lastEventReplayId );
             EventBus.TriggerContext.currentContext().setResumeCheckpoint( lastEventReplayId );
+        }
+
+    }
+
+    /**
+     * Aggregates and logs the errors from a partial-success DML operation.
+     * Each failed record is reported with its index, id, status code, offending
+     * fields, and message so a failure is diagnosable without a debug trace.
+     *
+     * @param operation
+     *      Human readable description of the DML being performed, used in the log message.
+     * @param records
+     *      The records the DML was attempted on, positionally aligned with `results`.
+     * @param results
+     *      The save results returned by the DML call.
+     */
+    private static void logDmlErrors( String operation, List<Mass_Action_Log__c> records, List<Database.SaveResult> results ) {
+
+        List<String> errors = new List<String>();
+
+        for ( Integer i = 0; i < results.size(); i++ ) {
+            if ( !results[i].isSuccess() ) {
+                for ( Database.Error err : results[i].getErrors() ) {
+                    errors.add( String.format(
+                        'Failed to {0} at index {1} (Id: {2}): [{3}] {4} — fields: {5}',
+                        new Object[] {
+                            operation, i, records[i].Id, err.getStatusCode(), err.getMessage(),
+                            String.join( err.getFields(), ', ' )
+                        }
+                    ));
+                }
+            }
+        }
+
+        if ( !errors.isEmpty() ) {
+            System.debug( LoggingLevel.ERROR, 'MA_BatchApexStatusEventTriggerHandler.logDmlErrors: ' + String.join( errors, '\n' ) );
         }
 
     }

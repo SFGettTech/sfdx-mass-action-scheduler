@@ -4,6 +4,20 @@ Website: https://douglascayers.com
 GitHub: https://github.com/douglascayers/sfdx-lightning-api-component
 License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Updated assertion for removal of
+ *     |            |              | URL.getSalesforceBaseUrl() after API 58.0.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class LC_VisualforceDomainControllerTest {
 
@@ -39,7 +53,9 @@ private class LC_VisualforceDomainControllerTest {
 
         // The test is not running in Visualforce context,
         // so best we can get here is domain in Apex context.
-        System.assertEquals( URL.getSalesforceBaseUrl().toExternalForm(), domainURL );
+        // URL.getSalesforceBaseUrl() was removed after API 58.0; URL.getOrgDomainUrl()
+        // is its replacement and returns the same base domain in Apex context.
+        System.assertEquals( URL.getOrgDomainUrl().toExternalForm(), domainURL );
 
         Test.stopTest();
 

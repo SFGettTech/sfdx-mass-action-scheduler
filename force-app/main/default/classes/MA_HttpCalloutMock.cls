@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Bumped API paths in mock JSON responses
+ *     |            |              | from v54.0 to v67.0.
+ * ---------------------------------------------------------------------------
+ */
 /*
  * Most code coverage comes from MA_EditConfigRestControllerTest
  */
@@ -72,7 +86,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '     "label" : "Test Flow", ' +
                 '     "name" : "Test_Flow", ' +
                 '     "type" : "FLOW", ' +
-                '     "url" : "/services/data/v54.0/actions/custom/flow/Test_Flow" ' +
+                '     "url" : "/services/data/v67.0/actions/custom/flow/Test_Flow" ' +
                 '   } ] ' +
                 ' } '
             );
@@ -83,7 +97,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
 
             response.setBody(
                 ' { ' +
-                '   "Account" : "/services/data/v54.0/actions/custom/quickAction/Account" ' +
+                '   "Account" : "/services/data/v67.0/actions/custom/quickAction/Account" ' +
                 ' } '
             );
 
@@ -97,7 +111,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '     "label" : "Test Quick Action", ' +
                 '     "name" : "Test_Quick_Action", ' +
                 '     "type" : "QUICKACTION", ' +
-                '     "url" : "/services/data/v54.0/actions/custom/quickAction/Account/Test_Quick_Action" ' +
+                '     "url" : "/services/data/v67.0/actions/custom/quickAction/Account/Test_Quick_Action" ' +
                 '   } ] ' +
                 ' } '
             );
@@ -108,7 +122,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
 
             response.setBody(
                 ' { ' +
-                '   "Account" : "/services/data/v54.0/actions/custom/emailAlert/Account" ' +
+                '   "Account" : "/services/data/v67.0/actions/custom/emailAlert/Account" ' +
                 ' } '
             );
 
@@ -122,7 +136,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '     "label" : "Test Email Alert", ' +
                 '     "name" : "Test_Email_Alert", ' +
                 '     "type" : "EMAILALERT", ' +
-                '     "url" : "/services/data/v54.0/actions/custom/emailalert/Account/Test_Email_Alert" ' +
+                '     "url" : "/services/data/v67.0/actions/custom/emailalert/Account/Test_Email_Alert" ' +
                 '   } ] ' +
                 ' } '
             );
@@ -137,7 +151,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '     "label" : "Test Apex", ' +
                 '     "name" : "Test_Apex", ' +
                 '     "type" : "APEX", ' +
-                '     "url" : "/services/data/v54.0/actions/custom/apex/Test_Apex" ' +
+                '     "url" : "/services/data/v67.0/actions/custom/apex/Test_Apex" ' +
                 '   } ] ' +
                 ' } '
             );
@@ -244,7 +258,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '   "records" : [ { ' +
                 '     "attributes" : { ' +
                 '       "type" : "Account", ' +
-                '       "url" : "/services/data/v54.0/sobjects/Account/001f400000CukanAAB" ' +
+                '       "url" : "/services/data/v67.0/sobjects/Account/001f400000CukanAAB" ' +
                 '     }, ' +
                 '     "Id" : "001f400000CukanAAB", ' +
                 '     "Name" : "Test Account 1" ' +
@@ -271,7 +285,7 @@ public inherited sharing class MA_HttpCalloutMock implements HttpCalloutMock {
                 '   "records" : [ { ' +
                 '     "attributes" : { ' +
                 '       "type" : "Account", ' +
-                '       "url" : "/services/data/v54.0/sobjects/Account/001f400000lxT2JAAU" ' +
+                '       "url" : "/services/data/v67.0/sobjects/Account/001f400000lxT2JAAU" ' +
                 '     }, ' +
                 '     "Id" : "001f400000lxT2JAAU", ' +
                 '     "Name" : "Test Account 2" ' +

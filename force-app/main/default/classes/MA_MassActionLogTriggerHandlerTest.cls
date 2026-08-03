@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Re-query log before update; master-detail field
+ *     |            |              | is no longer accepted in an update.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class MA_MassActionLogTriggerHandlerTest {
 
@@ -146,6 +160,13 @@ private class MA_MassActionLogTriggerHandlerTest {
         );
 
         insert log;
+
+        // Re-query before updating. The in-memory record still carries
+        // Mass_Action_Configuration__c, a non-reparentable master-detail field, and
+        // including a non-updateable field in an update is now rejected rather than
+        // ignored. Re-querying only the fields we intend to change mirrors how callers
+        // should update a log record.
+        log = [ SELECT Id, Message__c FROM Mass_Action_Log__c WHERE Id = :log.Id ];
 
         update log;
 

@@ -1,4 +1,19 @@
 ({
+    /**
+     * Modified by:  Josh Gettman
+     * Date:         2026-08-03
+     * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+     * Version:      1.0
+     *
+     * Modification Log:
+     * -----------------------------------------------------------------------
+     * Ver | Date       | Author       | Modification
+     * -----------------------------------------------------------------------
+     * 1.0 | 2026-08-03 | Josh Gettman | Bumped Tooling API query endpoint from
+     *     |            |              | v54.0 to v67.0.
+     * -----------------------------------------------------------------------
+     */
+
     onInit: function( component, event, helper ) {
 
         let promises = [];
@@ -16,7 +31,7 @@
         // get the currently installed package version
         promises.push(
             lcApi.restRequest({
-                'url' : '/services/data/v54.0/tooling/query?q=SELECT+Id,+SubscriberPackageId,+SubscriberPackage.Name,+SubscriberPackage.NamespacePrefix,+SubscriberPackageVersion.MajorVersion,+SubscriberPackageVersion.MinorVersion+FROM+InstalledSubscriberPackage'
+                'url' : '/services/data/v67.0/tooling/query?q=SELECT+Id,+SubscriberPackageId,+SubscriberPackage.Name,+SubscriberPackage.NamespacePrefix,+SubscriberPackageVersion.MajorVersion,+SubscriberPackageVersion.MinorVersion+FROM+InstalledSubscriberPackage'
             }).then( $A.getCallback( function( response ) {
                 // The InstalledSubscriberPackage object doesn't support WHERE clause filtering on the package's namespace
                 // so we have to filter the results ourselves

@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Updated assertion for removal of
+ *     |            |              | URL.getSalesforceBaseUrl() after API 58.0.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class LC_URLControllerTest {
 
@@ -18,7 +32,9 @@ private class LC_URLControllerTest {
         Map<String, String> urlInfo = LC_URLController.getUrlInfo();
 
         System.assertEquals( URL.getOrgDomainUrl().toExternalForm(), urlInfo.get( 'orgDomainURL' ) );
-        System.assertEquals( URL.getSalesforceBaseUrl().toExternalForm(), urlInfo.get( 'salesforceBaseURL' ) );
+        // URL.getSalesforceBaseUrl() was removed after API 58.0. The controller now
+        // sources 'salesforceBaseURL' from URL.getOrgDomainUrl() instead.
+        System.assertEquals( URL.getOrgDomainUrl().toExternalForm(), urlInfo.get( 'salesforceBaseURL' ) );
         System.assertEquals( namespace, urlInfo.get( 'namespace' ) );
 
         Test.stopTest();

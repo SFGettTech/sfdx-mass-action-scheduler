@@ -5,6 +5,20 @@
  * License: BSD 3-Clause License
  */
 /**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Excluded non-updateable master-detail field
+ *     |            |              | from the parent log update.
+ * ---------------------------------------------------------------------------
+ */
+/**
  * Designed for the upgrade to release 2.3 that introduces the record types to Mass_Action_Log__c object.
  * Batches over all log records with a blank record type and assigns the "Child_Log" record type to it.
  * For each unique combination of configuration id and job id of existing logs for a configuration,
@@ -226,7 +240,24 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
             }
         }
 
-        update parentLogsMap.values();
+        // The queried parent logs carry Mass_Action_Configuration__c, a non-reparentable
+        // master-detail field. Including a non-updateable field in an update is now
+        // rejected outright rather than ignored, so build fresh records that carry only
+        // the Id and the fields this batch actually changes. Verified by running identical
+        // code at API 54.0 (update succeeds) and API 67.0 (update fails) in the same org;
+        // the exact release that introduced the change was not determined.
+        List<Mass_Action_Log__c> parentLogsToUpdate = new List<Mass_Action_Log__c>();
+
+        for ( Mass_Action_Log__c parentLog : parentLogsMap.values() ) {
+            parentLogsToUpdate.add( new Mass_Action_Log__c(
+                Id = parentLog.Id,
+                Total_Batches__c = parentLog.Total_Batches__c,
+                Processed_Batches__c = parentLog.Processed_Batches__c,
+                Failed_Batches__c = parentLog.Failed_Batches__c
+            ));
+        }
+
+        update parentLogsToUpdate;
 
     }
 

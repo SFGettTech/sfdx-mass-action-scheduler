@@ -4,14 +4,28 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Bumped hardcoded REST and SOAP API path
+ *     |            |              | constants from 54.0 to 67.0.
+ * ---------------------------------------------------------------------------
+ */
 /*
  * Most code coverage comes from MA_EditConfigRestControllerTest
  */
 public inherited sharing class MA_MassActionUtils {
 
     public static final String ORG_DOMAIN_URL = URL.getOrgDomainUrl().toExternalForm();
-    public static final String REST_API_PATH = '/services/data/v54.0'; // note the 'v' prefix on the version number
-    public static final String SOAP_API_PATH = '/services/Soap/s/54.0'; // note no 'v' prefix on the version number
+    public static final String REST_API_PATH = '/services/data/v67.0'; // note the 'v' prefix on the version number
+    public static final String SOAP_API_PATH = '/services/Soap/s/67.0'; // note no 'v' prefix on the version number
 
     public static final String REST_API_SERVICES_URL = ORG_DOMAIN_URL + REST_API_PATH;
     public static final String SOAP_API_SERVICES_URL = ORG_DOMAIN_URL + SOAP_API_PATH;
@@ -26,7 +40,7 @@ public inherited sharing class MA_MassActionUtils {
      *      If blank then the org's domain URL is used instead.
      *
      * @return URL for use with Salesforce REST API (e.g. https://yourinstance.my.salesforce.com or callout:YourNamedCredential)
-     *  with the path '/services/data/v54.0' appended to it.
+     *  with the path '/services/data/v67.0' appended to it.
      */
     public static String getCalloutRestEndpointURL( String namedCredential ) {
         String url;
@@ -475,7 +489,7 @@ public inherited sharing class MA_MassActionUtils {
      * @param baseURL
      *      The 'baseURL' parameter can either be a Named Credential (e.g. 'callout:YourNC'),
      *      or the org's My Domain URL without any path (e.g. 'https://yourdomain.my.salesforce.com'),
-     *      with the SOAP API path suffix of '/services/Soap/s/54.0'.
+     *      with the SOAP API path suffix of '/services/Soap/s/67.0'.
      * @param apexScript
      *      The anonymous apex script to execute. This method URL encodes the string.
      */

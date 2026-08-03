@@ -4,6 +4,20 @@ Website: https://douglascayers.com
 GitHub: https://github.com/douglascayers/sfdx-lightning-api-component
 License: BSD 3-Clause License
  -->
+<!--
+    Modified by:  Josh Gettman
+    Date:         2026-08-03
+    Description:  Salesforce API version uplift, 54.0 -> 67.0.
+    Version:      1.0
+
+    Modification Log:
+    =======================================================================
+    Ver | Date       | Author       | Modification
+    =======================================================================
+    1.0 | 2026-08-03 | Josh Gettman | Bumped sample REST endpoint from
+        |            |              | v54.0 to v67.0.
+    =======================================================================
+-->
 <aura:component controller="LC_VisualforceDomainController">
 
     <ltng:require scripts="{!$Resource.penpal}"
@@ -45,7 +59,7 @@ License: BSD 3-Clause License
 
         Example usage:
             component.find( 'lcAPI' ).restRequest({
-                'url' : '/services/data/v54.0/sobjects/Account',
+                'url' : '/services/data/v67.0/sobjects/Account',
                 'method' : 'post',
                 'body' : JSON.stringify({
                     'Name' : 'Salesforce',

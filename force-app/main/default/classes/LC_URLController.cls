@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Replaced URL.getSalesforceBaseUrl(), removed
+ *     |            |              | after API 58.0, with URL.getOrgDomainUrl().
+ * ---------------------------------------------------------------------------
+ */
 public with sharing class LC_URLController {
 
     @AuraEnabled
@@ -11,7 +25,12 @@ public with sharing class LC_URLController {
 
         String namespace = getNamespaceOfClass( 'LC_URLController' );
         String orgDomainURL = URL.getOrgDomainUrl().toExternalForm();
-        String salesforceBaseURL = URL.getSalesforceBaseUrl().toExternalForm();
+
+        // URL.getSalesforceBaseUrl() was removed after API 58.0; URL.getOrgDomainUrl()
+        // is its replacement. The 'salesforceBaseURL' key is retained so the shape of
+        // this @AuraEnabled response does not change for any consumer, but it now
+        // returns the same value as 'orgDomainURL'.
+        String salesforceBaseURL = orgDomainURL;
 
         Map<String, String> result = new Map<String, String>();
 

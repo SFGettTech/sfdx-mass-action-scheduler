@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-03
+ * Description:  Salesforce API version uplift, 54.0 -> 67.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-03 | Josh Gettman | Bumped API path in illustrative doc
+ *     |            |              | comment from v54.0 to v67.0.
+ * ---------------------------------------------------------------------------
+ */
 public inherited sharing class MA_MapUtils {
 
     /**
@@ -50,7 +64,7 @@ public inherited sharing class MA_MapUtils {
      *        "Account" : {
      *          "attributes" : {
      *            "type" : "Account",
-     *            "url" : "/services/data/v54.0/sobjects/Account/001S00000106yiiIAA"
+     *            "url" : "/services/data/v67.0/sobjects/Account/001S00000106yiiIAA"
      *          },
      *          "Id" : "001S00000106yiiIAA",
      *          "Name" : "dca_mass_action: MA Test Account"

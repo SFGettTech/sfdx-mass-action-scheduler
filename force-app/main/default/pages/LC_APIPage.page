@@ -5,6 +5,20 @@ GitHub: https://github.com/douglascayers/sfdx-lightning-api-component
 License: BSD 3-Clause License
  -->
 <!--
+    Modified by:  Josh Gettman
+    Date:         2026-08-03
+    Description:  Salesforce API version uplift, 54.0 -> 67.0.
+    Version:      1.0
+
+    Modification Log:
+    =======================================================================
+    Ver | Date       | Author       | Modification
+    =======================================================================
+    1.0 | 2026-08-03 | Josh Gettman | Bumped jsforce Connection version from
+        |            |              | 54.0 to 67.0.
+    =======================================================================
+-->
+<!--
     For performance, turn off as much of the normal Salesforce page content.
  -->
 <apex:page applyHtmlTag="false"
@@ -28,7 +42,7 @@ License: BSD 3-Clause License
 
             const jsforceConn = new jsforce.Connection({
                 accessToken: '{!$Api.Session_Id}',
-                version: '54.0'
+                version: '67.0'
             });
 
             const penpalConn = Penpal.connectToParent({

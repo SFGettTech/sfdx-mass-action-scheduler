@@ -4,6 +4,20 @@ Website: https://douglascayers.com
 GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
 License: BSD 3-Clause License
  -->
+<!--
+    Modified by:  Josh Gettman
+    Date:         2026-08-03
+    Description:  Salesforce API version uplift, 54.0 -> 67.0.
+    Version:      1.0
+
+    Modification Log:
+    =======================================================================
+    Ver | Date       | Author       | Modification
+    =======================================================================
+    1.0 | 2026-08-03 | Josh Gettman | Bumped jsforce Connection version from
+        |            |              | 54.0 to 67.0.
+    =======================================================================
+-->
 <apex:page controller="MA_SetupAuthWizardPageController">
 
     <apex:slds />
@@ -196,7 +210,7 @@ License: BSD 3-Clause License
 
         var conn = new jsforce.Connection({
             accessToken : '{!$Api.Session_Id}',
-            version : '54.0'
+            version : '67.0'
         });
 
         // When creating a connected app, the consumer key and secret must be plain text.
