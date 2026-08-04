@@ -73,6 +73,11 @@
         <members>MA_UpgradePageLayoutsServiceTest</members>
         <members>MA_XMLUtils</members>
         <members>MA_XMLUtilsTest</members>
+        <members>toolMassActionFlowInvoker</members>
+        <members>toolMassActionFlowInvokerTEST</members>
+        <members>toolMassActionFlowRunnerMock</members>
+        <members>toolMassActionMigration</members>
+        <members>toolMassActionMigrationTEST</members>
         <name>ApexClass</name>
     </types>
     <types>
@@ -175,8 +180,10 @@
         <members>Mass_Action_Log__c.Submitted_Date__c</members>
         <members>Mass_Action_Log__c.Timestamp__c</members>
         <members>Mass_Action_Log__c.Total_Batches__c</members>
+        <members>Mass_Action_Mapping__c.Mapping_Type__c</members>
         <members>Mass_Action_Mapping__c.Mass_Action_Configuration__c</members>
         <members>Mass_Action_Mapping__c.Source_Field_Name__c</members>
+        <members>Mass_Action_Mapping__c.Source_Value__c</members>
         <members>Mass_Action_Mapping__c.Target_Field_Name__c</members>
         <name>CustomField</name>
     </types>
@@ -244,7 +251,7 @@
         <name>RecordType</name>
     </types>
     <types>
-        <members>Mass_Action_Test_Reports</members>
+        <members>Mass_Action_Test_Reports/</members>
         <members>Mass_Action_Test_Reports/MA_Test_Account_Report</members>
         <name>Report</name>
     </types>
@@ -255,5 +262,5 @@
         <members>penpal</members>
         <name>StaticResource</name>
     </types>
-    <version>54.0</version>
+    <version>67.0</version>
 </Package>

@@ -423,9 +423,39 @@ sf org assign permset --name Mass_Action_Admin --target-org <alias>
 sf data create record --sobject Account \
   --values "Name='dca_mass_action: MA Test Account'" --target-org <alias>
 
-# regenerate manifest/package.xml
-./scripts/recreate-manifest.sh
+# validate everything in a throwaway scratch org, the way CI does
+./scripts/validate-scratch.sh <alias> --target-dev-hub <devhub> [--delete-on-success]
+
+# regenerate manifest/package.xml (see below — do not hand-edit it)
+sf project generate manifest --source-dir force-app --output-dir manifest --api-version 67.0
 ```
+
+### `manifest/package.xml` is generated, never hand-edited
+
+`manifest/package.xml` is a **build artifact generated from `force-app`**. Do not edit it by
+hand, and do not add members to it manually.
+
+**Regenerate it whenever components are added, removed, or renamed** — new Apex classes, new
+custom fields, new objects, new Aura bundles, anything that changes what lives under
+`force-app`:
+
+```bash
+sf project generate manifest --source-dir force-app --output-dir manifest --api-version 67.0
+```
+
+Keep `--api-version` in step with `sourceApiVersion` in `sfdx-project.json` (currently
+**67.0**); the generator does not read it from the project file, so omitting the flag writes
+whatever the CLI defaults to.
+
+Two things to know when you regenerate:
+
+- The older `./scripts/recreate-manifest.sh` does the same job the long way, via a legacy v7
+  `sfdx force:source:convert` round trip. Prefer the command above.
+- Report folders are emitted with a trailing slash, `Mass_Action_Test_Reports/`, where a
+  hand-written manifest would say `Mass_Action_Test_Reports`. Both resolve to the same
+  metadata; this is a generator formatting difference, not a dropped component. Verify a
+  regeneration with `sf project convert source --root-dir force-app --manifest
+  manifest/package.xml --output-dir <tmp>` and diff the file listing if in doubt.
 
 Required org setup (both CI and the scratch script do this):
 
@@ -459,6 +489,8 @@ suite with coverage, collects Flow test coverage, uploads to Codecov, deletes th
 - Every new custom field ships with its `Mass_Action_Admin` field permission **and** a
   layout placement (§5).
 - New scripts and CI use `sf` (v2), never `sfdx force:*` (§8).
+- After adding or removing components, regenerate `manifest/package.xml` rather than
+  editing it by hand (§8).
 - Branch off `develop` (§9).
 - Note the "don't modernize upstream Apex" rule above does **not** apply to the CLI
   scripts and workflow — those may be moved to `sf` in the same pass (§8).
