@@ -27,6 +27,38 @@ Practical consequences to keep in mind:
 - `upstream` remote still points at the archived original. `origin` is
   `SFGettTech/sfdx-mass-action-scheduler`. Default working branch is `develop`.
 
+### Name collisions while the managed package is still installed
+
+A namespace isolates *API names*, so the fork's `Mass_Action_Configuration__c` and the
+managed `dca_mass_action__Mass_Action_Configuration__c` coexist happily. It does **not**
+isolate every name. Some metadata carries a separate, org-wide unique display name, and for
+those the fork collides with the managed package head-on.
+
+**`CustomNotificationType.customNotifTypeName` is not namespace-isolated.** Deploying the
+fork alongside the managed package fails with:
+
+> `duplicate value found: CustomNotifTypeName duplicates value on Mass Action Notification`
+
+`force-app/main/default/notificationtypes/Mass_Action_Notification.notiftype-meta.xml`
+therefore uses a distinct display name:
+
+```xml
+<customNotifTypeName>Mass Action Notification (Unpackaged)</customNotifTypeName>
+<masterLabel>Mass Action Notification (Unpackaged)</masterLabel>
+```
+
+The **API name `Mass_Action_Notification` and the file name are deliberately unchanged.**
+`flows/MAS_Mass_Action_Configuration.flow-meta.xml` references the notification type by API
+name in four places, and `manifest/package.xml` lists it by API name. Renaming the file or
+the API name would break the flow; renaming only the display value does not.
+
+Once the managed package is uninstalled from an org, the display name may optionally be
+changed back to `Mass Action Notification` in a follow-up deploy. That is cosmetic and is
+not required for anything to work.
+
+When adding metadata, watch for other types with an org-wide unique display name and give
+the unpackaged copy a distinct one the same way.
+
 ### Repo layout (verified)
 
 ```
