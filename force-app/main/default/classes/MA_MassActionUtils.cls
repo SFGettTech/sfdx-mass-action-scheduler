@@ -8,7 +8,7 @@
  * Modified by:  Josh Gettman
  * Date:         2026-08-03
  * Description:  Salesforce API version uplift, 54.0 -> 67.0.
- * Version:      1.0
+ * Version:      1.3
  *
  * Modification Log:
  * ---------------------------------------------------------------------------
@@ -35,6 +35,13 @@
  *     |            |              | Field' so legacy mappings are unchanged.
  *     |            |              | saveConfiguration now accepts both the legacy
  *     |            |              | string and an extended object per mapping.
+ * ---------------------------------------------------------------------------
+ * 1.2 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE to restore the system-mode SOQL
+ *     |            |              | and DML default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ * 1.3 | 2026-10-12 | Josh Gettman | getConfiguration selects
+ *     |            |              | Schedule_Interval_Minutes__c.
  * ---------------------------------------------------------------------------
  */
 /*
@@ -130,6 +137,7 @@ public inherited sharing class MA_MassActionUtils {
                 Schedule_DayOfMonth__c,
                 Schedule_MonthOfYear__c,
                 Schedule_DayOfWeek__c,
+                Schedule_Interval_Minutes__c,
                 // system
                 CreatedById,
                 CreatedDate,
@@ -151,6 +159,7 @@ public inherited sharing class MA_MassActionUtils {
                 Mass_Action_Configuration__c
             WHERE
                 Id = :recordId
+            WITH SYSTEM_MODE
             FOR VIEW
         ]) {
             config = record;
@@ -189,9 +198,13 @@ public inherited sharing class MA_MassActionUtils {
         System.debug( 'MA_MassActionUtils.saveConfiguration: fieldMappings=\n' + fieldMappings );
 
         Mass_Action_Configuration__c config = wrapper.toConfiguration();
-        upsert config;
+        Database.upsert( config, true, AccessLevel.SYSTEM_MODE );
 
-        delete [ SELECT Id FROM Mass_Action_Mapping__c WHERE Mass_Action_Configuration__c = :config.Id ];
+        Database.delete(
+            [ SELECT Id FROM Mass_Action_Mapping__c WHERE Mass_Action_Configuration__c = :config.Id WITH SYSTEM_MODE ],
+            true,
+            AccessLevel.SYSTEM_MODE
+        );
 
         List<Mass_Action_Mapping__c> configMappings = new List<Mass_Action_Mapping__c>();
         for ( String targetFieldName : fieldMappings.keySet() ) {
@@ -204,7 +217,7 @@ public inherited sharing class MA_MassActionUtils {
 
         }
 
-        insert configMappings;
+        Database.insert( configMappings, true, AccessLevel.SYSTEM_MODE );
 
         result.put( 'success', true );
         result.put( 'recordId', config.Id );
@@ -306,7 +319,7 @@ public inherited sharing class MA_MassActionUtils {
         System.debug( 'baseURL: ' + baseURL );
         System.debug( 'listViewId: ' + listViewId );
 
-        List<ListView> listViews = new List<ListView>([ SELECT id, sobjectType FROM ListView WHERE id = :listViewId LIMIT 1 ]);
+        List<ListView> listViews = new List<ListView>([ SELECT id, sobjectType FROM ListView WHERE id = :listViewId WITH SYSTEM_MODE LIMIT 1 ]);
         if ( listViews.isEmpty() ) {
             // provide a more helpful message than the default
             // System.QueryException: List has no rows for assignment to SObject

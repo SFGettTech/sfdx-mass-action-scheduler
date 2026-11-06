@@ -16,6 +16,9 @@
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Excluded non-updateable master-detail field
  *     |            |              | from the parent log update.
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
  * ---------------------------------------------------------------------------
  */
 /**
@@ -47,6 +50,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
                 RecordTypeId = null
                 AND
                 Job_ID__c != null
+            WITH SYSTEM_MODE
             ORDER BY
                 Mass_Action_Configuration__c ASC,
                 Job_ID__c ASC,
@@ -174,7 +178,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
         }
 
         // create new parent logs
-        insert parentLogsToInsertMap.values();
+        Database.insert( parentLogsToInsertMap.values(), true, AccessLevel.SYSTEM_MODE );
 
         // requery parent logs
         parentLogsMap = getParentLogsMap( configIds18, jobIds15 );
@@ -198,7 +202,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
         }
 
         // update child logs
-        update childLogsToUpdate;
+        Database.update( childLogsToUpdate, true, AccessLevel.SYSTEM_MODE );
 
         // In prior versions, only batch job errors were
         // logged, but to do I used try/catch in the start/execute/finish
@@ -219,6 +223,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
                 Parent_Log__c IN :parentLogsMap.values()
                 AND
                 RecordTypeId = :logRecordTypeInfosMap.get( 'Child_Log' ).getRecordTypeId()
+            WITH SYSTEM_MODE
             GROUP BY
                 Mass_Action_Configuration__c,
                 Job_ID__c,
@@ -257,7 +262,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
             ));
         }
 
-        update parentLogsToUpdate;
+        Database.update( parentLogsToUpdate, true, AccessLevel.SYSTEM_MODE );
 
     }
 
@@ -291,6 +296,7 @@ public without sharing class MA_UpgradeMassActionLogsBatchable implements Databa
                 Mass_Action_Configuration__c IN :configIds18
                 AND
                 Job_ID__c IN :jobIds15
+            WITH SYSTEM_MODE
         ]) {
             String key = computeKey( parentLog.Mass_Action_Configuration__c, parentLog.Job_ID__c );
             parentLogsMap.put( key, parentLog );

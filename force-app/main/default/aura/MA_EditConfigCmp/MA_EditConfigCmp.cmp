@@ -8,7 +8,7 @@ License: BSD 3-Clause License
     Modified by:  Josh Gettman
     Date:         2026-08-03
     Description:  Static (hard-coded) field mappings.
-    Version:      1.0
+    Version:      1.2
 
     Modification Log:
     =======================================================================
@@ -17,6 +17,14 @@ License: BSD 3-Clause License
     1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target
         |            |              | field use a source field or a static
         |            |              | value.
+    =======================================================================
+    1.1 | 2026-10-12 | Josh Gettman | Schedule stage adds "Repeat Every X
+        |            |              | Minutes" with optional hour and weekday
+        |            |              | limits.
+    =======================================================================
+    1.2 | 2026-11-06 | Josh Gettman | Source Type "Source Not Required":
+        |            |              | no source inputs, Field Mappings offer
+        |            |              | Static Value only
     =======================================================================
 -->
 <aura:component controller="MA_EditConfigCmpController" implements="flexipage:availableForRecordHome,force:hasRecordId,lightning:actionOverride" access="global">
@@ -229,6 +237,13 @@ License: BSD 3-Clause License
                     ]"
                     description="Whether a target field is populated from a source field or from a hard-coded static value. Mirrors Mass_Action_Mapping__c.Mapping_Type__c."/>
 
+    <aura:attribute name="staticOnlyMappingTypes"
+                    type="Map[]"
+                    default="[
+                        { &quot;label&quot; : &quot;Static Value&quot;, &quot;value&quot; : &quot;Static Value&quot; }
+                    ]"
+                    description="Mapping type options when Source Type is NotRequired (Source Not Required). There are no source fields to read, so every target field can only take a static value."/>
+
     <!-- Schedule Option Attributes -->
 
     <aura:attribute name="scheduleOptionsHourOfDay"
@@ -268,6 +283,10 @@ License: BSD 3-Clause License
     <aura:attribute name="scheduleSelectionsMonthOfYear"
                     type="String[]"
                     description="The selected values from the checkboxGroup. When save record need to convert list to csv string."/>
+
+    <aura:attribute name="scheduleSelectionsIntervalMinutes"
+                    type="String"
+                    description="The selected Repeat Every (Minutes) value when the frequency is Interval."/>
 
     <!-- Events -->
 
@@ -390,6 +409,10 @@ License: BSD 3-Clause License
                                             For example, if you need to make multiple SOQL queries, apply complex data filtering, or retrieve data from an external web service with http callouts.
                                             Learn how to develop custom iterators with the <a href="https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_iterable.htm" target="_blank" rel="noopener noreferrer">Apex Developer Guide</a>.
                                         </p>
+                                        <p>
+                                            <b>Source Not Required</b> skips reading records entirely. Use it to schedule a Flow or Apex action that finds its own data or needs no input.
+                                            The action runs once per scheduled run, and any inputs it needs are set as static values on the Field Mappings step.
+                                        </p>
                                     </aura:set>
 
                                     <aura:set attribute="rightTitle" value="Guidance"/>
@@ -432,6 +455,14 @@ License: BSD 3-Clause License
                                                             Up to 50 million records.
                                                             <br/>
                                                             Class must implement <code class="keyword">Iterable&lt;Map&lt;String, Object&gt;&gt;</code> and provide a no-argument constructor.
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td class="slds-nowrap"><b>Source Not Required</b></td>
+                                                        <td class="slds-cell-wrap">
+                                                            No records are read. The action runs once per run.
+                                                            <br/>
+                                                            Field mappings can only use static values.
                                                         </td>
                                                     </tr>
                                                 </tbody>
@@ -583,6 +614,7 @@ License: BSD 3-Clause License
                                                 <li>For Quick Actions, ensure the field is on the <a href="https://help.salesforce.com/articleView?id=action_layout_editor_about.htm" target="_blank" rel="noopener noreferrer">action's layout</a>.</li>
                                                 <li>For Invocable Apex, ensure the class variable has the <a href="https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_annotation_InvocableVariable.htm" target="_blank" rel="noopener noreferrer">@InvocableVariable</a> annotation.</li>
                                                 <li>For Anonymous Apex, the field mappings step is not used. Instead, your script handles all field mapping and logic within its <code class="keyword">execute</code> method.</li>
+                                                <li>When Source Type is <b>Source Not Required</b>, there are no source fields, so every target field uses a <b>Static Value</b>. Leave optional fields blank to skip them.</li>
                                             </ul>
                                         </p>
                                     </aura:set>
@@ -608,6 +640,11 @@ License: BSD 3-Clause License
                                         </p>
                                         <p>
                                             <b>Scheduled</b> provides simple options to choose the hour, day, month, and year to run the configuration repeatedly.
+                                        </p>
+                                        <p>
+                                            <b>Repeat Every X Minutes</b> runs the configuration every 5 to 60 minutes, in steps of 5.
+                                            You can limit runs to certain hours and weekdays; leave them empty to run around the clock.
+                                            If the previous run is still in progress when the next one is due, that run is skipped and logged.
                                         </p>
                                         <p>
                                             <b>Custom</b> allows you to specify your own cron expression which allows more advanced options than the provided simple scheduler.
@@ -910,6 +947,19 @@ License: BSD 3-Clause License
 
                             </aura:if>
 
+                            <aura:if isTrue="{!equals( v.sourceType, 'NotRequired' )}">
+
+                                <div class="slds-form-element slds-var-p-top_small">
+                                    <div class="slds-form-element__control">
+                                        <p>
+                                            No source records are needed. Click <b>Next</b> to choose the action to run.
+                                            It will run once each time this configuration runs, using any static values you set on the Field Mappings step.
+                                        </p>
+                                    </div>
+                                </div>
+
+                            </aura:if>
+
                             <aura:if isTrue="{!not(empty(v.sourceTypeURL))}">
 
                                 <div class="slds-form-element">
@@ -1092,7 +1142,7 @@ License: BSD 3-Clause License
                                                 label="{!targetFieldMapping.targetField.label}"
                                                 variant="label-hidden"
                                                 value="{!targetFieldMapping.mappingType}"
-                                                options="{!v.mappingTypes}"
+                                                options="{!equals( v.sourceType, 'NotRequired' ) ? v.staticOnlyMappingTypes : v.mappingTypes}"
                                                 onchange="{!c.handleMappingTypeChange}"
                                                 required="true"/>
 
@@ -1303,6 +1353,79 @@ License: BSD 3-Clause License
                                                 options="{!v.scheduleOptionsMonthOfYear}"
                                                 value="{!v.scheduleSelectionsMonthOfYear}"
                                                 required="true"
+                                                onchange="{!c.handleInputListBoxChanged}"/>
+
+                                        </div>
+
+                                    </div>
+
+                                </div>
+
+                            </aura:if>
+
+                            <aura:if isTrue="{!or( equals( v.scheduleSelectionsFrequency, 'Interval' ), and( not( empty( v.scheduleSelectionsFrequency ) ), equals( v.scheduleSelectionsFrequency[0], 'Interval' ) ) )}">
+
+                                <div class="slds-var-p-top_medium">
+
+                                    <p>
+                                        Choose how often to run, then optionally limit runs to certain hours and weekdays.
+                                        Leave the hours or weekdays empty to run at all hours or on every day.
+                                    </p>
+
+                                    <div class="slds-grid">
+
+                                        <div class="slds-col slds-size_1-of-3 slds-var-m-vertical_medium">
+
+                                            <c:slds_label label="{!v.objectDescribe.fields.Schedule_Interval_Minutes__c.label}"
+                                                          helpText="{!v.objectDescribe.fields.Schedule_Interval_Minutes__c.helpText}"/>
+                                            <lightning:combobox aura:id="inputScheduleIntervalMinutes"
+                                                name="inputScheduleIntervalMinutes"
+                                                variant="label-hidden"
+                                                label="{!v.objectDescribe.fields.Schedule_Interval_Minutes__c.label}"
+                                                placeholder="Select minutes"
+                                                options="{!v.objectDescribe.fields.Schedule_Interval_Minutes__c.picklistValues}"
+                                                value="{!v.scheduleSelectionsIntervalMinutes}"
+                                                required="true"
+                                                messageWhenValueMissing="Repeat Every (Minutes) is required."/>
+
+                                        </div>
+
+                                    </div>
+
+                                    <div class="slds-grid">
+
+                                        <div class="slds-col slds-var-m-vertical_medium">
+
+                                            <c:slds_label label="Only During These Hours"
+                                                          helpText="{!v.objectDescribe.fields.Schedule_HourOfDay__c.helpText}"/>
+                                            <lightning:dualListbox aura:id="inputScheduleIntervalHourOfDay"
+                                                name="inputScheduleIntervalHourOfDay"
+                                                variant="label-hidden"
+                                                label="Only During These Hours"
+                                                sourceLabel="Available Options"
+                                                selectedLabel="Selected Options"
+                                                options="{!v.scheduleOptionsHourOfDay}"
+                                                value="{!v.scheduleSelectionsHourOfDay}"
+                                                onchange="{!c.handleInputListBoxChanged}"/>
+
+                                        </div>
+
+                                    </div>
+
+                                    <div class="slds-grid">
+
+                                        <div class="slds-col slds-var-m-vertical_medium">
+
+                                            <c:slds_label label="Only On These Weekdays"
+                                                          helpText="Runs only on the selected weekdays. Leave empty to run every day."/>
+                                            <lightning:dualListbox aura:id="inputScheduleIntervalWeekday"
+                                                name="inputScheduleIntervalWeekday"
+                                                variant="label-hidden"
+                                                label="Only On These Weekdays"
+                                                sourceLabel="Available Options"
+                                                selectedLabel="Selected Options"
+                                                options="{!v.scheduleOptionsDayOfWeek}"
+                                                value="{!v.scheduleSelectionsDayOfWeek}"
                                                 onchange="{!c.handleInputListBoxChanged}"/>
 
                                         </div>

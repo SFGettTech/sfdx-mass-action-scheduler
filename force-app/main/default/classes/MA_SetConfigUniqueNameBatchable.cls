@@ -5,6 +5,21 @@
  * License: BSD 3-Clause License
  */
 /**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL and DML after the API 67.0 uplift.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ */
+/**
  * Designed for the upgrade to release 1.6 that introduces the Mass_Action_Configuration__c.DeveloperName__c field.
  * Batches over all config records with a blank developer name field and populates one for it based on its name.
  * Automatically retries updating the config record by appending a random suffix to the developer name until generates a unique value.
@@ -29,6 +44,7 @@ public without sharing class MA_SetConfigUniqueNameBatchable implements Database
                 Mass_Action_Configuration__c
             WHERE
                 DeveloperName__c = null
+            WITH SYSTEM_MODE
         ]);
     }
 
@@ -46,7 +62,7 @@ public without sharing class MA_SetConfigUniqueNameBatchable implements Database
 
         do {
 
-            List<Database.SaveResult> saveResults = Database.update( recordsToUpdate, false );
+            List<Database.SaveResult> saveResults = Database.update( recordsToUpdate, false, AccessLevel.SYSTEM_MODE );
             List<Mass_Action_Configuration__c> recordsToRetry = new List<Mass_Action_Configuration__c>();
 
             for ( Integer i = 0; i < saveResults.size(); i++ ) {

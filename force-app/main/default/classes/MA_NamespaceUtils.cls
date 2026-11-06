@@ -9,11 +9,25 @@
  * and it is documented that the use of 'with sharing' by apex classes called by the handler may prevent installation.
  * https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_install_handler.htm
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL after the API 67.0 uplift.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE to restore the
+ *     |            |              | system-mode SOQL default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ */
 public without sharing class MA_NamespaceUtils {
 
     // -- private --
 
-    private static final String MY_NAMESPACE = [ SELECT NamespacePrefix FROM ApexClass WHERE Name = 'MA_MassActionUtils' LIMIT 1 ].NamespacePrefix;
+    private static final String MY_NAMESPACE = [ SELECT NamespacePrefix FROM ApexClass WHERE Name = 'MA_MassActionUtils' WITH SYSTEM_MODE LIMIT 1 ].NamespacePrefix;
 
     // -- public --
 

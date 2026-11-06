@@ -4,6 +4,21 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL after the API 67.0 uplift.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ */
 public with sharing class MA_SoqlSourceBatchable implements Database.Batchable<SObject>,
                                                             Database.Stateful,
                                                             Database.AllowsCallouts,
@@ -25,7 +40,7 @@ public with sharing class MA_SoqlSourceBatchable implements Database.Batchable<S
 
         this.config = MA_MassActionUtils.getConfiguration( this.configId );
 
-        Database.QueryLocator queryLocator = Database.getQueryLocator( this.config.Source_SOQL_Query__c );
+        Database.QueryLocator queryLocator = Database.getQueryLocator( this.config.Source_SOQL_Query__c, AccessLevel.SYSTEM_MODE );
 
         MA_MassActionBatchUtils.handleBatchJobStarted( this.configId, context.getJobId() );
 

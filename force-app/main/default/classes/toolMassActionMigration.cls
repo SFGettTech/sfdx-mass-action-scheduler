@@ -11,7 +11,7 @@
  *
  *                 Copies Mass_Action_Configuration__c parents and their
  *                 Mass_Action_Mapping__c master-detail children. Fields are copied by
- *                 INTERSECTION: for each createable field on the un-namespaced target
+ *                 INTERSECTION: for each writable field on the un-namespaced target
  *                 object, the value is copied only if the managed object also exposes
  *                 that field as namespace__field. This means fields that exist only on
  *                 the newer un-namespaced object (e.g. Mapping_Type__c, Source_Value__c)
@@ -49,6 +49,19 @@
  *      |            |               | covered by tests without the managed package
  *      |            |               | installed. migrate() still rejects a blank
  *      |            |               | namespace, so production behaviour is unchanged.
+ * 1.1  | 2026-08-07 | Josh Gettman  | Passed AccessLevel.SYSTEM_MODE to every
+ *      |            |               | Database.query/upsert/insert/delete call. At API
+ *      |            |               | 67.0 these default to user mode, which made the
+ *      |            |               | migration depend on the running user's FLS over
+ *      |            |               | both the managed and the un-namespaced objects.
+ * 1.1  | 2026-08-25 | Josh Gettman  | Removed the last FLS dependency from the reader.
+ *      |            |               | Describe is user mode at API 67.0, so
+ *      |            |               | isCreateable() was silently dropping every field
+ *      |            |               | the running user had no FLS on -- including the
+ *      |            |               | external id, which then threw "SObject row was
+ *      |            |               | retrieved via SOQL without querying the requested
+ *      |            |               | field: DeveloperName__c". Field selection is now
+ *      |            |               | structural and the external id is always selected.
  */
 public without sharing class toolMassActionMigration {
 
@@ -150,7 +163,7 @@ public without sharing class toolMassActionMigration {
         Schema.SObjectField extIdField =
             targetConfigType.getDescribe().fields.getMap().get( CONFIG_EXTERNAL_ID.toLowerCase() );
 
-        List<Database.UpsertResult> upsertResults = Database.upsert( targetConfigs, extIdField, false );
+        List<Database.UpsertResult> upsertResults = Database.upsert( targetConfigs, extIdField, false, AccessLevel.SYSTEM_MODE );
         for ( Integer i = 0; i < upsertResults.size(); i++ ) {
             if ( !upsertResults[i].isSuccess() ) {
                 for ( Database.Error e : upsertResults[i].getErrors() ) {
@@ -164,7 +177,7 @@ public without sharing class toolMassActionMigration {
         Map<String, Id> targetConfigIdByDevName = new Map<String, Id>();
         for ( SObject tc : Database.query(
                 'SELECT Id, ' + CONFIG_EXTERNAL_ID + ' FROM ' + CONFIG_OBJECT +
-                ' WHERE ' + CONFIG_EXTERNAL_ID + ' != null' ) ) {
+                ' WHERE ' + CONFIG_EXTERNAL_ID + ' != null', AccessLevel.SYSTEM_MODE ) ) {
             targetConfigIdByDevName.put( (String) tc.get( CONFIG_EXTERNAL_ID ), (Id) tc.get( 'Id' ) );
         }
 
@@ -180,9 +193,9 @@ public without sharing class toolMassActionMigration {
         if ( !migratedParentIds.isEmpty() ) {
             List<SObject> existingMappings = Database.query(
                 'SELECT Id FROM ' + MAPPING_OBJECT +
-                ' WHERE ' + MAPPING_PARENT_FIELD + ' IN :migratedParentIds' );
+                ' WHERE ' + MAPPING_PARENT_FIELD + ' IN :migratedParentIds', AccessLevel.SYSTEM_MODE );
             if ( !existingMappings.isEmpty() ) {
-                List<Database.DeleteResult> deleteResults = Database.delete( existingMappings, false );
+                List<Database.DeleteResult> deleteResults = Database.delete( existingMappings, false, AccessLevel.SYSTEM_MODE );
                 for ( Integer i = 0; i < deleteResults.size(); i++ ) {
                     if ( !deleteResults[i].isSuccess() ) {
                         for ( Database.Error e : deleteResults[i].getErrors() ) {
@@ -219,7 +232,7 @@ public without sharing class toolMassActionMigration {
         }
 
         if ( !targetMappings.isEmpty() ) {
-            List<Database.SaveResult> insertResults = Database.insert( targetMappings, false );
+            List<Database.SaveResult> insertResults = Database.insert( targetMappings, false, AccessLevel.SYSTEM_MODE );
             for ( Integer i = 0; i < insertResults.size(); i++ ) {
                 if ( !insertResults[i].isSuccess() ) {
                     for ( Database.Error e : insertResults[i].getErrors() ) {
@@ -278,21 +291,26 @@ public without sharing class toolMassActionMigration {
                 MAPPING_OBJECT, ns, managedMappingFields, false );
 
             // ---- Read managed configurations ----
-            List<String> configSelect = new List<String>{ 'Id' };
+            // The external id is structural, not one of the optionally-copied values:
+            // the writer upserts on it, so it is selected explicitly and unconditionally
+            // rather than being left to the field intersection. A Set de-duplicates it
+            // against the copy tokens, which normally contain it as well.
+            String devNameToken = ns + CONFIG_EXTERNAL_ID;
+            Set<String> configSelect = new Set<String>{ 'Id', devNameToken };
             configSelect.addAll( configTokens.values() );
 
-            String configQuery = 'SELECT ' + String.join( configSelect, ', ' ) +
+            String configQuery = 'SELECT ' + String.join( new List<String>( configSelect ), ', ' ) +
                 ' FROM ' + ns + CONFIG_OBJECT;
-            List<SObject> managedConfigs = Database.query( configQuery );
+            List<SObject> managedConfigs = Database.query( configQuery, AccessLevel.SYSTEM_MODE );
 
             // ---- Read managed mappings, grouped by managed parent id ----
             String parentToken = ns + MAPPING_PARENT_FIELD;
-            List<String> mappingSelect = new List<String>{ 'Id', parentToken };
+            Set<String> mappingSelect = new Set<String>{ 'Id', parentToken };
             mappingSelect.addAll( mappingTokens.values() );
 
-            String mappingQuery = 'SELECT ' + String.join( mappingSelect, ', ' ) +
+            String mappingQuery = 'SELECT ' + String.join( new List<String>( mappingSelect ), ', ' ) +
                 ' FROM ' + ns + MAPPING_OBJECT;
-            List<SObject> managedMappings = Database.query( mappingQuery );
+            List<SObject> managedMappings = Database.query( mappingQuery, AccessLevel.SYSTEM_MODE );
 
             Map<Id, List<SObject>> mappingsByParent = new Map<Id, List<SObject>>();
             for ( SObject m : managedMappings ) {
@@ -304,7 +322,6 @@ public without sharing class toolMassActionMigration {
             }
 
             // ---- Translate to target-keyed DTOs ----
-            String devNameToken = ns + CONFIG_EXTERNAL_ID;
             List<ManagedConfig> results = new List<ManagedConfig>();
 
             for ( SObject sc : managedConfigs ) {
@@ -337,11 +354,13 @@ public without sharing class toolMassActionMigration {
 
         /**
          * Builds a map of un-namespaced target field API name -> managed SELECT token,
-         * for every createable field on the target object (custom fields, plus the
+         * for every writable field on the target object (custom fields, plus the
          * standard Name when allowed) that also exists on the managed object. The
          * master-detail parent field is always excluded (handled separately by the
-         * writer). Using isCreateable() naturally excludes autonumber, formula, and
-         * system fields.
+         * writer). Formula and auto-number fields are excluded because they cannot be
+         * written; other standard and system fields are excluded by the isCustom check.
+         * The selection is intentionally FLS-independent -- see the comment on the
+         * exclusions below.
          */
         private Map<String, String> buildCopyTokens(
                 String targetObjectApiName, String ns,
@@ -357,7 +376,16 @@ public without sharing class toolMassActionMigration {
                 DescribeFieldResult dfr = targetFields.get( key ).getDescribe();
                 String apiName = dfr.getName();
 
-                if ( !dfr.isCreateable() ) {
+                // Structural exclusions only. Deliberately NOT isCreateable(): at API 67.0
+                // describe is evaluated in user mode, so isCreateable() also reports the
+                // running user's FLS. In an org where Mass_Action_Admin is not assigned to
+                // the running user, that silently emptied this map, which dropped fields
+                // from the migration and left the external id out of the SELECT list. Every
+                // query and DML in this class runs SYSTEM_MODE, so the field set it copies
+                // must not depend on FLS either. Formula and auto-number fields are not
+                // writable and are excluded structurally instead; neither object carries a
+                // roll-up summary field, which Apex describe cannot identify directly.
+                if ( dfr.isCalculated() || dfr.isAutoNumber() ) {
                     continue;
                 }
                 if ( apiName == MAPPING_PARENT_FIELD ) {

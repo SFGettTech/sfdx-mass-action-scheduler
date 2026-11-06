@@ -4,6 +4,24 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Coexist with the managed package; pinned to API 66.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Filtered the fixture Report lookup to
+ *     |            |              | NamespacePrefix = null so it does not
+ *     |            |              | also match the managed package's copy.
+ * 1.0 | 2026-08-07 | Josh Gettman | Pinned this test class to API 66.0 so its
+ *     |            |              | own SOQL and DML keep the system-mode
+ *     |            |              | default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ */
 @IsTest
 private class MA_MassActionBatchUtilsTest {
 
@@ -22,7 +40,7 @@ private class MA_MassActionBatchUtilsTest {
     @IsTest( SeeAllData = true )
     static void test_enqueue_report_job() {
 
-        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' ];
+        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' AND NamespacePrefix = null ];
 
         Mass_Action_Configuration__c config = new Mass_Action_Configuration__c(
             Name = 'Test Config',

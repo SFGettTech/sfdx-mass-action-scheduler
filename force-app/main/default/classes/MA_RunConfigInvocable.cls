@@ -4,6 +4,21 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL after the API 67.0 uplift.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ */
 global with sharing class MA_RunConfigInvocable {
 
     @InvocableMethod(
@@ -60,7 +75,7 @@ global with sharing class MA_RunConfigInvocable {
         }
 
         Map<ID, Mass_Action_Configuration__c> configMap = new Map<ID, Mass_Action_Configuration__c>([
-            SELECT Id, DeveloperName__c FROM Mass_Action_Configuration__c WHERE Id IN :configIds
+            SELECT Id, DeveloperName__c FROM Mass_Action_Configuration__c WHERE Id IN :configIds WITH SYSTEM_MODE
         ]);
 
         return configMap;
@@ -76,7 +91,7 @@ global with sharing class MA_RunConfigInvocable {
         }
 
         Map<String, Mass_Action_Configuration__c> configMap = new Map<String, Mass_Action_Configuration__c>();
-        for ( Mass_Action_Configuration__c config : [ SELECT Id, DeveloperName__c FROM Mass_Action_Configuration__c WHERE DeveloperName__c IN :uniqueNames ] ) {
+        for ( Mass_Action_Configuration__c config : [ SELECT Id, DeveloperName__c FROM Mass_Action_Configuration__c WHERE DeveloperName__c IN :uniqueNames WITH SYSTEM_MODE ] ) {
             configMap.put( config.DeveloperName__c, config );
         }
 

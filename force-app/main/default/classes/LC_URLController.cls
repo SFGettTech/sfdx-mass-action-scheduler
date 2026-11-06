@@ -16,6 +16,8 @@
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Replaced URL.getSalesforceBaseUrl(), removed
  *     |            |              | after API 58.0, with URL.getOrgDomainUrl().
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE to restore the
+ *     |            |              | system-mode SOQL default lost at API 67.0.
  * ---------------------------------------------------------------------------
  */
 public with sharing class LC_URLController {
@@ -43,7 +45,7 @@ public with sharing class LC_URLController {
 
     private static String getNamespaceOfClass( String className ) {
 
-        String namespace = [ SELECT NamespacePrefix FROM ApexClass WHERE Name = :className LIMIT 1 ].NamespacePrefix;
+        String namespace = [ SELECT NamespacePrefix FROM ApexClass WHERE Name = :className WITH SYSTEM_MODE LIMIT 1 ].NamespacePrefix;
 
         return ( String.isBlank( namespace ) ? '' : namespace );
     }

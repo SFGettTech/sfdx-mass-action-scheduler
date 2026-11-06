@@ -4,13 +4,67 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-10-12
+ * Description:  Interval scheduling and overlap protection for scheduled runs.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-10-12 | Josh Gettman | An interval ("Repeat Every X Minutes")
+ *     |            |              | config books its next run before anything
+ *     |            |              | else, and a start failure is logged rather
+ *     |            |              | than thrown so it cannot break that chain.
+ *     |            |              | Every scheduled run is skipped and logged
+ *     |            |              | while the previous run of the same config
+ *     |            |              | is still in progress.
+ * ---------------------------------------------------------------------------
+ */
+/*
+ * MA_MassActionSchedulable reaches this class through Type.forName, so this class
+ * can be changed and deployed while Mass Action jobs are scheduled.
+ */
 public with sharing class MA_MassActionBatchEnqueuer implements MA_MassActionSchedulable.MA_MassActionSchedulableDispatched {
 
     public void execute( SchedulableContext context, ID configID ) {
 
         System.debug( 'MA_MassActionBatchEnqueuer.execute: ' + context );
 
-        MA_MassActionBatchUtils.enqueueAction( configId );
+        Mass_Action_Configuration__c config = MA_MassActionUtils.getConfiguration( configId );
+
+        Boolean isInterval = MA_MassActionScheduleUtils.isInterval( config );
+
+        // An interval config is scheduled one run at a time. Book the next run first so
+        // that nothing below, including a skipped or failed run, can stop the repeats.
+        if ( isInterval && config.Active__c ) {
+            MA_MassActionScheduleUtils.scheduleNextIntervalRun( configId );
+        }
+
+        AsyncApexJob runningJob = MA_MassActionBatchUtils.getRunningJob( configId );
+
+        if ( runningJob != null ) {
+            MA_MassActionBatchUtils.logSkippedRun( configId, runningJob );
+            return;
+        }
+
+        if ( isInterval ) {
+
+            // Log instead of throwing: an uncaught exception would roll back the
+            // next run booked above and end the repeats.
+            try {
+                MA_MassActionBatchUtils.enqueueAction( configId );
+            } catch ( Exception e ) {
+                MA_MassActionBatchUtils.logFailedRun( configId, e );
+            }
+
+        } else {
+
+            MA_MassActionBatchUtils.enqueueAction( configId );
+
+        }
 
     }
 

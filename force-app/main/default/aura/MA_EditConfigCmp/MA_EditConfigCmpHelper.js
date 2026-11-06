@@ -8,7 +8,7 @@ License: BSD 3-Clause License
  * Modified by:  Josh Gettman
  * Date:         2026-08-03
  * Description:  Static (hard-coded) field mappings.
- * Version:      1.0
+ * Version:      1.2
  *
  * Modification Log:
  * ---------------------------------------------------------------------------
@@ -16,6 +16,15 @@ License: BSD 3-Clause License
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target field
  *     |            |              | use a source field or a static value.
+ * ---------------------------------------------------------------------------
+ * 1.1 | 2026-10-12 | Josh Gettman | Schedule stage supports "Repeat Every X
+ *     |            |              | Minutes" (Interval) with optional hour and
+ *     |            |              | weekday limits.
+ * ---------------------------------------------------------------------------
+ * 1.2 | 2026-11-06 | Josh Gettman | Source Type "Source Not Required": Field
+ *     |            |              | Mappings force Static Value; switching
+ *     |            |              | source type also clears a leftover Apex
+ *     |            |              | class
  * ---------------------------------------------------------------------------
  */
 ({
@@ -72,6 +81,7 @@ License: BSD 3-Clause License
         var record = component.get( 'v.record' );
 
         component.set( 'v.scheduleSelectionsFrequency', record.scheduleFrequency );
+        component.set( 'v.scheduleSelectionsIntervalMinutes', record.scheduleIntervalMinutes );
 
         // add the "NN." prefix to the values used for sorting
         // so match the schedule options format so the selections are visually shown on the config page
@@ -180,6 +190,14 @@ License: BSD 3-Clause License
         if ( sourceType != 'SOQL' ) {
 
             record.sourceSoqlQuery = null;
+
+        }
+
+        // Clear a leftover Apex class too, so switching to another source type
+        // (including Source Not Required) does not save a stale Source_Apex_Class__c.
+        if ( sourceType != 'Apex' ) {
+
+            record.sourceApexClass = null;
 
         }
 
@@ -650,6 +668,15 @@ License: BSD 3-Clause License
 
                     return null;
 
+                } else if ( sourceType == 'NotRequired' ) {
+
+                    // Source Not Required: there are no source fields to offer. Every row
+                    // is forced to Static Value below, so the source field input never
+                    // renders; 'text' is set only so the attribute has a defined value.
+                    component.set( 'v.sourceFieldsInputType', 'text' );
+
+                    return null;
+
                 }
 
             })).then( $A.getCallback( function( sourceFieldsResult ) {
@@ -684,6 +711,11 @@ License: BSD 3-Clause License
                 var recordFieldMappings = component.get( 'v.record.fieldMappings' ); // what currently has been mapped in database
                 var targetFieldMappings = []; // what user will work with in UI to assign source fields to target fields
 
+                // With no source there is nothing for a Source Field mapping to read, so every
+                // row is a Static Value. A source field carried over from a previous source
+                // type is dropped here rather than saved and then failing at run time.
+                var sourceIsNotRequired = ( sourceType == 'NotRequired' );
+
                 for ( var i = 0; i < targetFields.length; i++ ) {
 
                     var targetField = targetFields[i];
@@ -709,9 +741,9 @@ License: BSD 3-Clause License
                             'targetField' : targetField,
                             // default to Source Field so an unmapped target field, and any
                             // mapping saved before Mapping_Type__c existed, behaves as before
-                            'mappingType' : ( recordFieldMapping.mappingType || 'Source Field' ),
-                            'sourceFieldName' : recordFieldMapping.sourceFieldName,
-                            'sourceValue' : recordFieldMapping.sourceValue
+                            'mappingType' : ( sourceIsNotRequired ? 'Static Value' : ( recordFieldMapping.mappingType || 'Source Field' ) ),
+                            'sourceFieldName' : ( sourceIsNotRequired ? null : recordFieldMapping.sourceFieldName ),
+                            'sourceValue' : ( ( sourceIsNotRequired && recordFieldMapping.mappingType !== 'Static Value' ) ? null : recordFieldMapping.sourceValue )
                         });
 
                     }
@@ -787,6 +819,7 @@ License: BSD 3-Clause License
         var scheduleFrequency = component.get( 'v.scheduleSelectionsFrequency' );
         var scheduleFrequenceIsScheduled = ( scheduleFrequency == 'Scheduled' || ( !$A.util.isUndefinedOrNull( scheduleFrequency ) && scheduleFrequency.length && scheduleFrequency[0] == 'Scheduled' ) );
         var scheduleFrequenceIsCustom = ( scheduleFrequency == 'Custom' || ( !$A.util.isUndefinedOrNull( scheduleFrequency ) && scheduleFrequency.length && scheduleFrequency[0] == 'Custom' ) );
+        var scheduleFrequenceIsInterval = ( scheduleFrequency == 'Interval' || ( !$A.util.isUndefinedOrNull( scheduleFrequency ) && scheduleFrequency.length && scheduleFrequency[0] == 'Interval' ) );
 
         var inputScheduleWeekdayIsEmpty = helper.isEmpty( component.get( 'v.scheduleSelectionsDayOfWeek' ) );
         var inputScheduleDayOfMonthIsEmpty = helper.isEmpty( component.get( 'v.scheduleSelectionsDayOfMonth' ) );
@@ -993,6 +1026,15 @@ License: BSD 3-Clause License
                         });
                         break;
 
+                    // The interval's hour and weekday limits are optional, so they fall
+                    // through to the default case; only the interval itself is required.
+                    case 'inputScheduleIntervalMinutes':
+                        inputValidityAsync = Promise.resolve({
+                            'invalid': ( scheduleFrequenceIsInterval && ( inputIsEmpty || inputIsInvalid ) ),
+                            'messageWhenInvalid': messageWhenValueMissing
+                        });
+                        break;
+
                     // Default
 
                     default:
@@ -1071,11 +1113,13 @@ License: BSD 3-Clause License
         var scheduleDayOfWeek = component.get( 'v.scheduleSelectionsDayOfWeek' );
         var scheduleDayOfMonth = component.get( 'v.scheduleSelectionsDayOfMonth' );
         var scheduleMonthOfYear = component.get( 'v.scheduleSelectionsMonthOfYear' );
+        var scheduleIntervalMinutes = component.get( 'v.scheduleSelectionsIntervalMinutes' );
 
         record.scheduleFrequency = ( $A.util.isArray( scheduleFrequency ) ? ( scheduleFrequency.length > 0 ? scheduleFrequency[0] : null ) : scheduleFrequency );
 
         // if manual then null the other schedule fields
         // if scheduled then parse the schedule fields, null the cron field
+        // if interval then keep the interval plus the optional hour and weekday limits
         // if custom then null the schedule fields except cron field
 
         if ( record.scheduleFrequency == 'Manual' ) {
@@ -1087,6 +1131,7 @@ License: BSD 3-Clause License
             record.scheduleDayOfMonth = null;
             record.scheduleMonthOfYear = null;
             record.scheduleDayOfWeek = null;
+            record.scheduleIntervalMinutes = null;
 
         }
         else if ( record.scheduleFrequency == 'Scheduled' ) {
@@ -1101,6 +1146,22 @@ License: BSD 3-Clause License
             record.scheduleDayOfMonth = scheduleDayOfMonth.map( function( dayOfMonth ) { return dayOfMonth.split('.')[1]; } ).join(',') || '?';
             record.scheduleMonthOfYear = scheduleMonthOfYear.map( function( monthOfYear ) { return monthOfYear.split('.')[1]; } ).join(',');
             record.scheduleDayOfWeek = scheduleDayOfWeek.map( function( dayOfWeek ) { return dayOfWeek.split('.')[1]; } ).join(',') || '?';
+            record.scheduleIntervalMinutes = null;
+
+        }
+        else if ( record.scheduleFrequency == 'Interval' ) {
+
+            // hours and weekdays are optional limits; none selected means no limit,
+            // which is saved as null. Day of month and month do not apply.
+
+            record.scheduleCron = null;
+            record.scheduleSecondOfMinute = null;
+            record.scheduleMinuteOfHour = null;
+            record.scheduleHourOfDay = scheduleHourOfDay.map( function( hourOfDay ) { return hourOfDay.split('.')[1]; } ).join(',') || null;
+            record.scheduleDayOfMonth = null;
+            record.scheduleMonthOfYear = null;
+            record.scheduleDayOfWeek = scheduleDayOfWeek.map( function( dayOfWeek ) { return dayOfWeek.split('.')[1]; } ).join(',') || null;
+            record.scheduleIntervalMinutes = ( $A.util.isEmpty( scheduleIntervalMinutes ) ? null : scheduleIntervalMinutes );
 
         }
         else if ( record.scheduleFrequency == 'Custom' ) {
@@ -1111,6 +1172,7 @@ License: BSD 3-Clause License
             record.scheduleDayOfMonth = null;
             record.scheduleMonthOfYear = null;
             record.scheduleDayOfWeek = null;
+            record.scheduleIntervalMinutes = null;
 
         }
 

@@ -13,8 +13,10 @@
     <testClassName>MA_ListViewDescribeResultTest</testClassName>
     <testClassName>MA_ListViewSourceBatchableTest</testClassName>
     <testClassName>MA_MapUtilsTest</testClassName>
+    <testClassName>MA_MassActionBatchEnqueuerTest</testClassName>
     <testClassName>MA_MassActionBatchUtilsTest</testClassName>
     <testClassName>MA_MassActionConfigTriggerHandlerTest</testClassName>
+    <testClassName>MA_MassActionLogCleanupQueueableTest</testClassName>
     <testClassName>MA_MassActionLogTriggerHandlerTest</testClassName>
     <testClassName>MA_MassActionSchedulableTest</testClassName>
     <testClassName>MA_MassActionScheduleUtilsTest</testClassName>
@@ -33,5 +35,7 @@
     <testClassName>MA_UpgradePageLayoutsServiceTest</testClassName>
     <testClassName>MA_XMLUtilsTest</testClassName>
     <testClassName>toolMassActionFlowInvokerTEST</testClassName>
+    <testClassName>toolMassActionLogCleanUpBatchTEST</testClassName>
     <testClassName>toolMassActionMigrationTEST</testClassName>
+    <testClassName>toolNoSourceIterableTEST</testClassName>
 </ApexTestSuite>

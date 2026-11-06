@@ -32,11 +32,14 @@
         <members>MA_MapUtils</members>
         <members>MA_MapUtilsTest</members>
         <members>MA_MassActionBatchEnqueuer</members>
+        <members>MA_MassActionBatchEnqueuerTest</members>
         <members>MA_MassActionBatchUtils</members>
         <members>MA_MassActionBatchUtilsTest</members>
         <members>MA_MassActionConfigTriggerHandler</members>
         <members>MA_MassActionConfigTriggerHandlerTest</members>
         <members>MA_MassActionConfigWrapper</members>
+        <members>MA_MassActionLogCleanupQueueable</members>
+        <members>MA_MassActionLogCleanupQueueableTest</members>
         <members>MA_MassActionLogTriggerHandler</members>
         <members>MA_MassActionLogTriggerHandlerTest</members>
         <members>MA_MassActionSchedulable</members>
@@ -76,8 +79,12 @@
         <members>toolMassActionFlowInvoker</members>
         <members>toolMassActionFlowInvokerTEST</members>
         <members>toolMassActionFlowRunnerMock</members>
+        <members>toolMassActionLogCleanUpBatch</members>
+        <members>toolMassActionLogCleanUpBatchTEST</members>
         <members>toolMassActionMigration</members>
         <members>toolMassActionMigrationTEST</members>
+        <members>toolNoSourceIterable</members>
+        <members>toolNoSourceIterableTEST</members>
         <name>ApexClass</name>
     </types>
     <types>
@@ -151,6 +158,7 @@
         <members>Mass_Action_Configuration__c.Schedule_DayOfWeek__c</members>
         <members>Mass_Action_Configuration__c.Schedule_Frequency__c</members>
         <members>Mass_Action_Configuration__c.Schedule_HourOfDay__c</members>
+        <members>Mass_Action_Configuration__c.Schedule_Interval_Minutes__c</members>
         <members>Mass_Action_Configuration__c.Schedule_MinuteOfHour__c</members>
         <members>Mass_Action_Configuration__c.Schedule_MonthOfYear__c</members>
         <members>Mass_Action_Configuration__c.Schedule_SecondOfMinute__c</members>
@@ -226,7 +234,10 @@
         <name>Layout</name>
     </types>
     <types>
+        <members>Mass_Action_Configuration__c.Active_On_Demand</members>
+        <members>Mass_Action_Configuration__c.Active_Scheduled</members>
         <members>Mass_Action_Configuration__c.All</members>
+        <members>Mass_Action_Configuration__c.All_Active</members>
         <members>Mass_Action_Log__c.All</members>
         <members>Mass_Action_Log__c.All_Parent_Logs</members>
         <name>ListView</name>

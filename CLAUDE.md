@@ -59,6 +59,29 @@ not required for anything to work.
 When adding metadata, watch for other types with an org-wide unique display name and give
 the unpackaged copy a distinct one the same way.
 
+**`sf org assign permset --name Mass_Action_Admin` is ambiguous while the managed package
+is installed.** A namespace isolates the permission set's *API name* but not the `--name`
+lookup: the org holds two `PermissionSet` records called `Mass_Action_Admin`, the managed
+one (`NamespacePrefix = 'dca_mass_action'`) and the fork's (`NamespacePrefix = null`), and
+the CLI silently picks the managed one. The assignment succeeds and reports success, so
+nothing looks wrong — but the running user gets no field-level security on the fork's
+fields, and since API 67.0 runs Apex in user mode (see §4) that surfaces later as
+`No such column 'DeveloperName__c'` and "fields being inaccessible" at runtime.
+
+In an org where the managed package is still installed, assign by Id instead:
+
+```bash
+# find the un-namespaced one
+sf data query --target-org <alias> \
+  --query "SELECT Id, NamespacePrefix FROM PermissionSet WHERE Name = 'Mass_Action_Admin'"
+
+sf data create record --sobject PermissionSetAssignment --target-org <alias> \
+  --values "AssigneeId=<userId> PermissionSetId=<the NamespacePrefix = null Id>"
+```
+
+Scratch orgs do not have the managed package installed, so `--name` stays correct there and
+`scripts/create-scratch-org.sh` and CI are unaffected.
+
 ### Repo layout (verified)
 
 ```
@@ -265,6 +288,44 @@ their own BSD-style notice. Preserve whatever notice a file already has; the rul
   required, and document why in a comment above the class (upstream does this — see
   `MA_NamespaceUtils`, which explains the install-handler constraint).
 
+### Access level — SOQL and DML must say `SYSTEM_MODE` explicitly
+
+At **API 67.0 (Summer '26) Apex database operations default to user mode**, where 66.0 and
+earlier defaulted to system mode
+([Apex Developer Guide](https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_classes_enforce_usermode.htm)).
+This repo is entirely at 67.0, so an unqualified `insert`/`[ SELECT ... ]` now enforces the
+running user's FLS and object permissions. This application is admin tooling that runs in
+batch, scheduled, and platform-event contexts, and upstream wrote it against system-mode
+semantics, so **every SOQL and DML statement in a product class states its access level**:
+
+```apex
+[ SELECT Id FROM Mass_Action_Configuration__c WHERE Id IN :ids WITH SYSTEM_MODE ]
+Database.query( soql, AccessLevel.SYSTEM_MODE )
+Database.getQueryLocator( soql, AccessLevel.SYSTEM_MODE )
+Database.insert( records, true, AccessLevel.SYSTEM_MODE )   // true = the old `insert` semantics
+```
+
+Clause order matters: `WITH SYSTEM_MODE` goes after `WHERE` and before
+`GROUP BY` / `ORDER BY` / `LIMIT` / `FOR VIEW`.
+
+Note that `AccessLevel` controls CRUD/FLS only — record-level sharing still follows the
+class's `with`/`without sharing` keyword, so the two settings are independent.
+
+Two things `AccessLevel` does **not** cover, both of which bite at 67.0:
+
+- **Describe calls are user-mode too.** `SObjectType.getDescribe().fields.getMap()` returns
+  only the fields the running user can see, and `DescribeFieldResult.isCreateable()` is
+  FLS-aware. Code that picks fields dynamically (`toolMassActionMigration`) therefore
+  depends on the caller's permissions; verify the permission set is really assigned (see
+  the `Mass_Action_Admin` ambiguity in §1) before concluding a field is missing.
+- **`Schema.getGlobalDescribe()` reflects the calling class's API version.** A class pinned
+  to 66.0 does not see objects introduced in 67.0, so assertions that compare a 66.0 test's
+  describe against a 67.0 class's output will not match exactly.
+
+**Test classes are pinned to `<apiVersion>66.0</apiVersion>`** in their `.cls-meta.xml` so
+their own setup SOQL/DML keeps the system-mode default without every fixture needing an
+explicit access level. Product classes stay at 67.0. Keep new test classes on 66.0 to match.
+
 ### String literals
 - **Single quotes** for all Apex string literals and for string replacements
   (`String.replace`, `String.format` arguments, etc.).
@@ -403,6 +464,24 @@ parallel seeding script, a static resource, or a `@TestSetup` workaround.
 For everything that *doesn't* need `SeeAllData`, create data inside the test with
 `@TestSetup` as normal — the seed account is an exception forced by the Analytics API,
 not the general pattern.
+
+**Every org the tests run in needs the seed Account, sandboxes and production included —
+not just scratch orgs and CI.** A production deploy runs the suite, and without the record
+the test report returns no rows, so `MA_ReportSourceBatchable.execute` is never reached.
+That shows up as four failures whose messages point nowhere near the cause
+(`MA_ReportSourceBatchableTest` asserting "should have failed" three times, and
+`MA_ReportServiceTest.testGetNextPageReportResults` throwing `List index out of bounds: 0`)
+plus a deploy-blocking `MA_ReportSourceBatchable ... coverage is 61.818%, at least 75%
+required`. Seed the org once, before the first deploy:
+
+```bash
+# Note: on Windows/Git Bash the space in the name breaks `sf data create record`;
+# use `sf apex run` with a one-line script instead, as scripts/validate-scratch.sh does.
+sf data create record --sobject Account   --values "Name='dca_mass_action: MA Test Account'" --target-org <alias>
+```
+
+Those four tests now assert the record exists up front and say so by name, so a missing
+seed reports itself rather than surfacing as an unrelated assertion.
 
 ---
 

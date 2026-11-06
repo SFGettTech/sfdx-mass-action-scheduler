@@ -4,7 +4,38 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL and DML after the API 67.0 uplift.
+ * Version:      1.2
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
+ * ---------------------------------------------------------------------------
+ * 1.1 | 2026-10-12 | Josh Gettman | Added getRunningJob, logSkippedRun and
+ *     |            |              | logFailedRun so a scheduled run can skip
+ *     |            |              | itself while the previous run of the same
+ *     |            |              | configuration is still in progress.
+ * ---------------------------------------------------------------------------
+ * 1.2 | 2026-11-06 | Josh Gettman | enqueueAction supports Source_Type__c
+ *     |            |              | 'NotRequired' via toolNoSourceIterable:
+ *     |            |              | the target runs once per run with static
+ *     |            |              | mappings only
+ * ---------------------------------------------------------------------------
+ */
 public inherited sharing class MA_MassActionBatchUtils {
+
+    // AsyncApexJob.Status values for a batch job that has not finished.
+    private static final Set<String> ACTIVE_JOB_STATUSES = new Set<String>{ 'Holding', 'Queued', 'Preparing', 'Processing' };
+
+    // How many of the configuration's most recent runs to check for one still in progress.
+    private static final Integer RUNNING_JOB_LOOKBACK = 5;
 
     public static ID enqueueAction( ID configId ) {
 
@@ -31,6 +62,10 @@ public inherited sharing class MA_MassActionBatchUtils {
             } else if ( config.Source_Type__c == 'Apex' ) {
 
                 jobId = enqueueApexJob( config );
+
+            } else if ( config.Source_Type__c == toolNoSourceIterable.SOURCE_TYPE ) {
+
+                jobId = enqueueNoSourceJob( config );
 
             } else {
 
@@ -60,7 +95,7 @@ public inherited sharing class MA_MassActionBatchUtils {
                 Message_Type__c = 'Informational'
             );
 
-            insert log;
+            Database.insert( log, true, AccessLevel.SYSTEM_MODE );
 
         } else {
 
@@ -120,6 +155,124 @@ public inherited sharing class MA_MassActionBatchUtils {
 
         Iterable<Map<String, Object>> iterable = (Iterable<Map<String, Object>>) t.newInstance();
         return Database.executeBatch( new MA_IterableSourceBatchable( config.Id, iterable ), config.Batch_Size__c.intValue() );
+
+    }
+
+    /**
+     * Source Not Required: the iterable yields a single empty row, so the batch runs one
+     * execute() and the target action is invoked exactly once, with inputs supplied only
+     * by Static Value mappings. Scope size is fixed at 1 because there is only ever one
+     * row, which also means a blank Batch_Size__c cannot break this source type.
+     */
+    private static ID enqueueNoSourceJob( Mass_Action_Configuration__c config ) {
+
+        return Database.executeBatch( new MA_IterableSourceBatchable( config.Id, new toolNoSourceIterable() ), 1 );
+    }
+
+    // ----------------------------------------------------
+
+    /**
+     * Returns the batch job of this configuration's run that is still in progress,
+     * or null if none is.
+     *
+     * Every run writes a parent log carrying its batch job id (see enqueueAction), so
+     * the configuration's most recent parent logs identify the jobs to check.
+     */
+    public static AsyncApexJob getRunningJob( ID configId ) {
+
+        Set<ID> jobIds = new Set<ID>();
+
+        for ( Mass_Action_Log__c parentLog : [
+            SELECT
+                Job_ID__c
+            FROM
+                Mass_Action_Log__c
+            WHERE
+                Mass_Action_Configuration__c = :configId
+                AND
+                RecordType.DeveloperName = 'Parent_Log'
+                AND
+                Job_ID__c != null
+            WITH SYSTEM_MODE
+            ORDER BY
+                CreatedDate DESC
+            LIMIT :RUNNING_JOB_LOOKBACK
+        ]) {
+            jobIds.add( ID.valueOf( parentLog.Job_ID__c ) );
+        }
+
+        if ( jobIds.isEmpty() ) {
+            return null;
+        }
+
+        for ( AsyncApexJob job : [
+            SELECT
+                Id, Status, CreatedDate
+            FROM
+                AsyncApexJob
+            WHERE
+                Id IN :jobIds
+                AND
+                Status IN :ACTIVE_JOB_STATUSES
+            WITH SYSTEM_MODE
+            ORDER BY
+                CreatedDate DESC
+            LIMIT 1
+        ]) {
+            return job;
+        }
+
+        return null;
+    }
+
+    /**
+     * Records that a scheduled run was skipped because the previous run is still in progress.
+     */
+    public static void logSkippedRun( ID configId, AsyncApexJob runningJob ) {
+
+        System.debug( LoggingLevel.WARN, 'MA_MassActionBatchUtils.logSkippedRun: configId=' + configId + ', runningJob=' + runningJob );
+
+        insertRunLog(
+            configId,
+            'Informational',
+            'Scheduled run skipped: the previous run is still in progress',
+            'Scheduled run skipped because batch job ' + runningJob.Id + ' from a previous run of this configuration is still ' +
+                runningJob.Status + '. The next scheduled run will try again.'
+        );
+
+    }
+
+    /**
+     * Records that a scheduled run could not be started.
+     */
+    public static void logFailedRun( ID configId, Exception e ) {
+
+        System.debug( LoggingLevel.ERROR, 'MA_MassActionBatchUtils.logFailedRun: configId=' + configId + ', error=' + e.getMessage() );
+
+        insertRunLog(
+            configId,
+            'Error',
+            'Scheduled run failed to start',
+            e.getTypeName() + ': ' + e.getMessage() + '\n' + e.getStackTraceString()
+        );
+
+    }
+
+    private static void insertRunLog( ID configId, String messageType, String message, String longMessage ) {
+
+        Map<String, RecordTypeInfo> logRecordTypeInfosMap = Mass_Action_Log__c.SObjectType.getDescribe().getRecordTypeInfosByDeveloperName();
+
+        Mass_Action_Log__c log = new Mass_Action_Log__c(
+            RecordTypeId = logRecordTypeInfosMap.get( 'Parent_Log' ).getRecordTypeId(),
+            Mass_Action_Configuration__c = configId,
+            Submitted_Date__c = DateTime.now(),
+            Timestamp__c = String.valueOf( DateTime.now().getTime() ),
+            Message__c = MA_StringUtils.abbreviateWithinFieldLength( message, Mass_Action_Log__c.Message__c ),
+            Long_Message__c = MA_StringUtils.abbreviateWithinFieldLength( longMessage, Mass_Action_Log__c.Long_Message__c ),
+            Message_Type__c = messageType
+        );
+
+        Database.insert( log, true, AccessLevel.SYSTEM_MODE );
 
     }
 
@@ -202,7 +355,7 @@ public inherited sharing class MA_MassActionBatchUtils {
             Last_Run_Completed_With_Errors__c = ( String.isNotBlank( job.ExtendedStatus ) || job.NumberOfErrors > 0 )
         );
 
-        update config;
+        Database.update( config, true, AccessLevel.SYSTEM_MODE );
 
     }
 
@@ -224,6 +377,7 @@ public inherited sharing class MA_MassActionBatchUtils {
                 AsyncApexJob
             WHERE
                 Id IN :jobIds
+            WITH SYSTEM_MODE
         ]);
 
         if ( Test.isRunningTest() ) {
@@ -271,6 +425,7 @@ public inherited sharing class MA_MassActionBatchUtils {
                 Job_ID__c IN :parentJobIds
                 AND
                 RecordType.DeveloperName = 'Parent_Log'
+            WITH SYSTEM_MODE
         ]) {
             jobIdToParentLogMap.put( ID.valueOf( parentLog.Job_ID__c ), parentLog );
         }
@@ -300,6 +455,7 @@ public inherited sharing class MA_MassActionBatchUtils {
                 AsyncApexJob
             WHERE
                 Id = :jobId
+            WITH SYSTEM_MODE
             LIMIT 1
         ]) {
             job = item;

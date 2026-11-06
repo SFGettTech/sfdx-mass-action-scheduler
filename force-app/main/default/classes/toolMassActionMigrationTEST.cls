@@ -234,8 +234,8 @@ private class toolMassActionMigrationTEST {
         System.assertEquals( 'Flow', mc.configValues.get( 'Target_Type__c' ) );
         System.assertEquals( false, mc.configValues.get( 'Active__c' ), 'Active__c must be preserved as read.' );
 
-        // the intersection only yields createable fields, never formula or system fields
-        System.assertEquals( false, mc.configValues.containsKey( 'Id' ), 'Id is not createable and must be excluded.' );
+        // the intersection only yields writable custom fields, never formula or system fields
+        System.assertEquals( false, mc.configValues.containsKey( 'Id' ), 'Id is not writable and must be excluded.' );
         System.assertEquals( false, mc.configValues.containsKey( 'CreatedDate' ), 'System fields must be excluded.' );
 
         // children are grouped under their parent, and the master-detail parent field is

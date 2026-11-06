@@ -4,6 +4,24 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL and DML after the API 67.0 uplift.
+ * Version:      1.1
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE so SOQL and DML keep the
+ *     |            |              | system-mode default lost at API 67.0.
+ * 1.1 | 2026-10-13 | Josh Gettman | Cap child log cascade delete to the
+ *     |            |              | remaining DML/query row budget; overflow
+ *     |            |              | is handed to MA_MassActionLogCleanupQueueable.
+ * ---------------------------------------------------------------------------
+ */
 public with sharing class MA_MassActionLogTriggerHandler {
 
     public MA_MassActionLogTriggerHandler() {}
@@ -50,7 +68,7 @@ public with sharing class MA_MassActionLogTriggerHandler {
 
     public void handleBeforeDelete( List<Mass_Action_Log__c> oldList, Map<ID, Mass_Action_Log__c> oldMap ) {
 
-        cascadeDeleteChildLogs( oldMap.keySet() );
+        cascadeDeleteChildLogs( oldList );
 
     }
 
@@ -70,8 +88,40 @@ public with sharing class MA_MassActionLogTriggerHandler {
      * will have been blanked out and so the query will not find any
      * child logs to delete.
      */
-    private static void cascadeDeleteChildLogs( Set<ID> parentLogIds ) {
-        delete [
+    private static void cascadeDeleteChildLogs( List<Mass_Action_Log__c> oldLogs ) {
+
+        // Only parent logs have children; skip the query when deleting child logs,
+        // which happens on every recursive pass of this trigger.
+        ID parentRecordTypeId = Mass_Action_Log__c.SObjectType.getDescribe()
+            .getRecordTypeInfosByDeveloperName().get( 'Parent_Log' ).getRecordTypeId();
+
+        Set<ID> parentLogIds = new Set<ID>();
+        for ( Mass_Action_Log__c oldLog : oldLogs ) {
+            if ( oldLog.RecordTypeId == parentRecordTypeId ) {
+                parentLogIds.add( oldLog.Id );
+            }
+        }
+
+        if ( parentLogIds.isEmpty() ) {
+            return;
+        }
+
+        // A parent log has roughly one child log per batch execution, so deleting
+        // a handful of parents can exceed the 10,000 DML row limit. Delete only
+        // what fits in the remaining budget (reserving the parent rows themselves);
+        // any children left over are orphaned by the SetNull lookup and swept up
+        // by MA_MassActionLogCleanupQueueable in its own transactions.
+        Integer rowBudget = Math.min(
+            Limits.getLimitDmlRows() - Limits.getDmlRows() - parentLogIds.size(),
+            Limits.getLimitQueryRows() - Limits.getQueryRows()
+        );
+
+        if ( rowBudget <= 0 ) {
+            MA_MassActionLogCleanupQueueable.enqueue();
+            return;
+        }
+
+        List<Mass_Action_Log__c> childLogs = [
             SELECT
                 Id
             FROM
@@ -80,9 +130,20 @@ public with sharing class MA_MassActionLogTriggerHandler {
                 Parent_Log__c IN :parentLogIds
                 AND
                 RecordType.DeveloperName = 'Child_Log'
+            WITH SYSTEM_MODE
             ORDER BY
                 Parent_Log__c
+            LIMIT :rowBudget
         ];
+
+        if ( !childLogs.isEmpty() ) {
+            Database.delete( childLogs, true, AccessLevel.SYSTEM_MODE );
+        }
+
+        if ( childLogs.size() == rowBudget ) {
+            MA_MassActionLogCleanupQueueable.enqueue();
+        }
+
     }
 
     /**

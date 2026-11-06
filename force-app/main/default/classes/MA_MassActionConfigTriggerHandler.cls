@@ -4,6 +4,20 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-10-12
+ * Description:  Interval ("Repeat Every X Minutes") scheduling.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-10-12 | Josh Gettman | A change to Schedule_Interval_Minutes__c
+ *     |            |              | now reschedules the configuration.
+ * ---------------------------------------------------------------------------
+ */
 public with sharing class MA_MassActionConfigTriggerHandler {
 
     public MA_MassActionConfigTriggerHandler() {}
@@ -81,8 +95,9 @@ public with sharing class MA_MassActionConfigTriggerHandler {
                 Boolean dayOfWeekChanged = ( oldConfig.Schedule_DayOfWeek__c != newConfig.Schedule_DayOfWeek__c );
                 Boolean dayOfMonthChanged = ( oldConfig.Schedule_DayOfMonth__c != newConfig.Schedule_DayOfMonth__c );
                 Boolean monthOfYearChanged = ( oldConfig.Schedule_MonthOfYear__c != newconfig.Schedule_MonthOfYear__c );
+                Boolean intervalChanged = ( oldConfig.Schedule_Interval_Minutes__c != newConfig.Schedule_Interval_Minutes__c );
 
-                Boolean reschedule = ( activeChanged || frequencyChanged || cronChanged || secondChanged || minuteChanged || hourChanged || dayOfWeekChanged || dayOfMonthChanged || monthOfYearChanged );
+                Boolean reschedule = ( activeChanged || frequencyChanged || cronChanged || secondChanged || minuteChanged || hourChanged || dayOfWeekChanged || dayOfMonthChanged || monthOfYearChanged || intervalChanged );
 
                 if ( reschedule ) {
                     configsToReschedule.add( newConfig );

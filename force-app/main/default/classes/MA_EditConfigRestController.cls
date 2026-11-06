@@ -4,6 +4,25 @@
  * GitHub: https://github.com/sfdx-mass-action-scheduler/sfdx-mass-action-scheduler
  * License: BSD 3-Clause License
  */
+/**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Restore system-mode SOQL after the API 67.0 uplift, and scope the
+ *               test named credential lookup to the un-namespaced copy.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Added WITH SYSTEM_MODE / AccessLevel.
+ *     |            |              | SYSTEM_MODE to restore the system-mode
+ *     |            |              | default lost at API 67.0.
+ * 1.0 | 2026-08-07 | Josh Gettman | Filtered the test-only named credential
+ *     |            |              | query to namespacePrefix = null so it does
+ *     |            |              | not also match the managed package's copy.
+ * ---------------------------------------------------------------------------
+ */
 @RestResource( urlMapping = '/config/edit/*' )
 global with sharing class MA_EditConfigRestController {
 
@@ -358,7 +377,7 @@ global with sharing class MA_EditConfigRestController {
 
         List<Map<String, Object>> options = new List<Map<String, Object>>();
 
-        for ( Folder folder : [ SELECT id, name FROM Folder WHERE type = 'Report' AND developerName != null ORDER BY name ] ) {
+        for ( Folder folder : [ SELECT id, name FROM Folder WHERE type = 'Report' AND developerName != null WITH SYSTEM_MODE ORDER BY name ] ) {
             options.add( new Map<String, Object>{
                 'label' => folder.name,
                 'value' => String.valueOf( folder.id ).left( 15 )
@@ -372,7 +391,7 @@ global with sharing class MA_EditConfigRestController {
 
         List<Map<String, Object>> options = new List<Map<String, Object>>();
 
-        for ( Report record : [ SELECT id, name FROM Report WHERE ownerId = :folderId AND format = 'Tabular' ORDER BY name ] ) {
+        for ( Report record : [ SELECT id, name FROM Report WHERE ownerId = :folderId AND format = 'Tabular' WITH SYSTEM_MODE ORDER BY name ] ) {
             options.add( new Map<String, Object>{
                 'label' => record.name,
                 'value' => String.valueOf( record.id ).left( 15 )
@@ -386,7 +405,7 @@ global with sharing class MA_EditConfigRestController {
 
         Report rpt = null;
 
-        for ( Report record : [ SELECT id, name, ownerId, owner.name, folderName FROM Report WHERE id = :recordId LIMIT 1 ] ) {
+        for ( Report record : [ SELECT id, name, ownerId, owner.name, folderName FROM Report WHERE id = :recordId WITH SYSTEM_MODE LIMIT 1 ] ) {
             rpt = record;
         }
 
@@ -449,6 +468,7 @@ global with sharing class MA_EditConfigRestController {
             SELECT SObjectType
             FROM ListView
             WHERE IsSoqlCompatible = true AND SObjectType != null
+            WITH SYSTEM_MODE
             GROUP BY SObjectType
             ORDER BY SObjectType ASC
             LIMIT 2000
@@ -487,7 +507,7 @@ global with sharing class MA_EditConfigRestController {
 
         List<Map<String, Object>> options = new List<Map<String, Object>>();
 
-        for ( ListView record : [ SELECT id, name FROM ListView WHERE sobjectType = :objectName AND IsSoqlCompatible = true ORDER BY name ] ) {
+        for ( ListView record : [ SELECT id, name FROM ListView WHERE sobjectType = :objectName AND IsSoqlCompatible = true WITH SYSTEM_MODE ORDER BY name ] ) {
             options.add( new Map<String, Object>{
                 'label' => record.name,
                 'value' => String.valueOf( record.id ).substring( 0, 15 )
@@ -501,7 +521,7 @@ global with sharing class MA_EditConfigRestController {
 
         ListView lv = null;
 
-        for ( ListView record : [ SELECT id, name, sobjectType FROM ListView WHERE id = :recordId LIMIT 1 ] ) {
+        for ( ListView record : [ SELECT id, name, sobjectType FROM ListView WHERE id = :recordId WITH SYSTEM_MODE LIMIT 1 ] ) {
             lv = record;
         }
 
@@ -566,8 +586,14 @@ global with sharing class MA_EditConfigRestController {
 
         // for code coverage, this is a separate if statement rather than if/else
         // because with if/else one of the paths would never get tested =/
+        // The namespacePrefix filter matters only under test. When the managed Mass Action
+        // Scheduler package is still installed alongside this un-namespaced fork, both orgs'
+        // copies of the test named credential share the same developerName and the fixture
+        // query returns two rows. Restricting to the un-namespaced copy selects this fork's.
+        // The production branch above is deliberately left unfiltered so that named
+        // credentials belonging to other packages remain selectable in the UI.
         if ( Test.isRunningTest() ) {
-            whereClause = ' WHERE developerName  = \'Mass_Action_Test_Named_Credential\' ';
+            whereClause = ' WHERE developerName  = \'Mass_Action_Test_Named_Credential\' AND namespacePrefix = null ';
         }
 
         String query =
@@ -578,7 +604,7 @@ global with sharing class MA_EditConfigRestController {
             whereClause
         ;
 
-        for ( NamedCredential credential : Database.query( query ) ) {
+        for ( NamedCredential credential : Database.query( query, AccessLevel.SYSTEM_MODE ) ) {
             options.add( new Map<String, Object>{
                 'label' => credential.masterLabel,
                 'value' => credential.developerName

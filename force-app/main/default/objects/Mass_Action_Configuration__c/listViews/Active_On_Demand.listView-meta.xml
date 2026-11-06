@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ListView xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Active_On_Demand</fullName>
+    <columns>NAME</columns>
+    <columns>Active__c</columns>
+    <columns>Schedule_Frequency__c</columns>
+    <columns>Source_Type__c</columns>
+    <columns>Target_Type__c</columns>
+    <columns>Target_Action_Name__c</columns>
+    <columns>Last_Run_Completed_Date__c</columns>
+    <filterScope>Everything</filterScope>
+    <filters>
+        <field>Active__c</field>
+        <operation>equals</operation>
+        <value>1</value>
+    </filters>
+    <filters>
+        <field>Schedule_Frequency__c</field>
+        <operation>equals</operation>
+        <value>Manual</value>
+    </filters>
+    <label>Active - On Demand</label>
+</ListView>

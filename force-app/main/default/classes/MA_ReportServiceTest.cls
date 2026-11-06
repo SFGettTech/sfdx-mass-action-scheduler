@@ -28,6 +28,29 @@
     POSSIBILITY OF SUCH DAMAGE.
 */
 /**
+ * Modified by:  Josh Gettman
+ * Date:         2026-08-07
+ * Description:  Coexist with the managed package; pinned to API 66.0.
+ * Version:      1.0
+ *
+ * Modification Log:
+ * ---------------------------------------------------------------------------
+ * Ver | Date       | Author       | Modification
+ * ---------------------------------------------------------------------------
+ * 1.0 | 2026-08-07 | Josh Gettman | Filtered the fixture Report lookup to
+ *     |            |              | NamespacePrefix = null so it does not
+ *     |            |              | also match the managed package's copy.
+ * 1.0 | 2026-08-07 | Josh Gettman | Pinned this test class to API 66.0 so its
+ *     |            |              | own SOQL and DML keep the system-mode
+ *     |            |              | default lost at API 67.0.
+ * 1.0 | 2026-08-25 | Josh Gettman | testGetNextPageReportResults now asserts the
+ *     |            |              | seed Account exists before indexing the
+ *     |            |              | query result, so a target org that was never
+ *     |            |              | seeded reports that instead of a bare
+ *     |            |              | List index out of bounds: 0.
+ * ---------------------------------------------------------------------------
+ */
+/**
  * @author Salesforce.org
  * @group CampaignTools
  * @description A service class that provides methods for interacting with
@@ -71,6 +94,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         MA_ReportService service = new MA_ReportService();
@@ -90,6 +114,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         Test.startTest();
@@ -120,6 +145,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         Test.startTest();
@@ -166,6 +192,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         Test.startTest();
@@ -198,6 +225,19 @@ private class MA_ReportServiceTest {
 
         String nameFilter = ACCOUNT_NAME_PREFIX + '%';
         List<Account> accounts = [ SELECT Id FROM Account WHERE Name LIKE :nameFilter ORDER BY Id ASC ];
+
+        // The seed record is created outside the test run (scripts/create-scratch-org.sh
+        // locally, the CI workflow in automation) because the Reports API only sees data
+        // that existed before the test started. Say so plainly rather than letting the
+        // list index below throw a bare out-of-bounds error.
+        System.assertNotEquals(
+            0,
+            accounts.size(),
+            'Missing seed data: this org has no Account whose name starts with [' +
+            ACCOUNT_NAME_PREFIX + ']. Create it in the target org before deploying; ' +
+            'see CLAUDE.md section 6.'
+        );
+
         ID firstAccountId = accounts[0].Id;
 
         // remove first account; when filter the report we expect all the other ids to be returned
@@ -208,6 +248,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         String columnName = 'ACCOUNT_ID';
@@ -258,6 +299,7 @@ private class MA_ReportServiceTest {
             SELECT Id
             FROM Report
             WHERE DeveloperName = 'MA_Test_Account_Report'
+              AND NamespacePrefix = null
         ];
 
         String columnName = 'ACCOUNT_ID';

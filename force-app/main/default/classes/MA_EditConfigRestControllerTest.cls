@@ -16,6 +16,13 @@
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Added buildActionInputs and saveConfiguration
  *     |            |              | coverage for static value mappings.
+ * 1.0 | 2026-08-07 | Josh Gettman | Filtered the fixture Report and Folder
+ *     |            |              | lookups to NamespacePrefix = null so
+ *     |            |              | they do not also match the managed
+ *     |            |              | package's copies.
+ * 1.0 | 2026-08-07 | Josh Gettman | Pinned this test class to API 66.0 so
+ *     |            |              | its own SOQL and DML keep the system-
+ *     |            |              | mode default lost at API 67.0.
  * ---------------------------------------------------------------------------
  */
 @IsTest
@@ -344,8 +351,8 @@ private class MA_EditConfigRestControllerTest {
         // Reports and Report Folders cannot be created in unit tests as these are considered 'metadata'.
         // So we rely on the package bundling test folder/report and must use SeeAllData = true.
 
-        Folder f = [ SELECT Id FROM Folder WHERE DeveloperName = 'Mass_Action_Test_Reports' ];
-        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' ];
+        Folder f = [ SELECT Id FROM Folder WHERE DeveloperName = 'Mass_Action_Test_Reports' AND NamespacePrefix = null ];
+        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' AND NamespacePrefix = null ];
 
         Map<String, Object> responseBodyMap;
 
@@ -425,9 +432,31 @@ private class MA_EditConfigRestControllerTest {
 
         List<Object> objectNames = (List<Object>) responseBodyMap.get( 'result' );
 
+        // Schema.getGlobalDescribe() returns the objects that exist as of the API version
+        // of the class that calls it. This test class is pinned to API 66.0 (see the
+        // modification log) while MA_EditConfigRestController compiles at 67.0, so the
+        // controller legitimately returns objects that 66.0 does not know about
+        // (VoiceCallHistory, WorkItemEvent, and similar 67.0 additions). Asserting an
+        // exact match would be asserting on the version gap, not on the controller.
+        //
+        // What the controller actually promises is that every object visible to it is
+        // offered exactly once, so assert that every object this class can see came back.
+        Set<String> returnedNames = new Set<String>();
         for ( Object item : objectNames ) {
             Map<String, Object> objectName = (Map<String, Object>) item;
-            System.assert( globalDescribeMap.containsKey( String.valueOf( objectName.get( 'value' ) ) ) );
+            String value = String.valueOf( objectName.get( 'value' ) );
+            System.assert( String.isNotBlank( value ), 'Every option must carry an object name.' );
+            returnedNames.add( value );
+        }
+
+        System.assertEquals( objectNames.size(), returnedNames.size(), 'Object names should not be duplicated.' );
+
+        for ( String objectName : globalDescribeMap.keySet() ) {
+            String apiName = globalDescribeMap.get( objectName ).getDescribe().getName();
+            System.assert(
+                returnedNames.contains( apiName ),
+                'Expected getObjectNames to include ' + apiName
+            );
         }
 
     }

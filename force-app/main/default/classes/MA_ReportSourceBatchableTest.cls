@@ -16,6 +16,18 @@
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Stub the flow runner in the Flow target test;
  *     |            |              | the HTTP mock no longer covers that path.
+ * 1.0 | 2026-08-07 | Josh Gettman | Filtered the fixture Report lookup to
+ *     |            |              | NamespacePrefix = null so it does not
+ *     |            |              | also match the managed package's copy.
+ * 1.0 | 2026-08-07 | Josh Gettman | Pinned this test class to API 66.0 so
+ *     |            |              | its own SOQL and DML keep the system-
+ *     |            |              | mode default lost at API 67.0.
+ * 1.0 | 2026-08-25 | Josh Gettman | Added assertSeedAccountExists() to the
+ *     |            |              | three failure-path tests. Without the seed
+ *     |            |              | Account the report yields no rows, the
+ *     |            |              | batch never reaches execute(), and they
+ *     |            |              | failed on 'should have failed' instead of
+ *     |            |              | naming the missing prerequisite.
  * ---------------------------------------------------------------------------
  */
 @IsTest
@@ -29,6 +41,33 @@ private class MA_ReportSourceBatchableTest {
      * https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_analytics_test_reports.htm
      */
 
+    // The test report filters on accounts whose name starts with this value. The record
+    // is seeded outside the test run -- by scripts/create-scratch-org.sh locally and by
+    // the CI workflow -- because the Reports API only sees data that existed before the
+    // test started, so no test can create it for itself.
+    private static final String SEED_ACCOUNT_NAME = 'dca_mass_action: MA Test Account';
+
+    /**
+     * Fails with an actionable message when the seed Account is missing from the target
+     * org. Without it the test report returns no rows, the batch job's execute method
+     * never runs, and the tests below fail on their own assertions with messages that
+     * say nothing about the real cause.
+     */
+    private static void assertSeedAccountExists() {
+
+        String nameFilter = SEED_ACCOUNT_NAME + '%';
+
+        System.assertNotEquals(
+            0,
+            [ SELECT COUNT() FROM Account WHERE Name LIKE :nameFilter ],
+            'Missing seed data: this org has no Account whose name starts with [' +
+            SEED_ACCOUNT_NAME + ']. The test report returns no rows without it, so ' +
+            'MA_ReportSourceBatchable.execute never runs and the assertions below cannot ' +
+            'pass. Create the Account in the target org before deploying; see CLAUDE.md section 6.'
+        );
+
+    }
+
     /**
      * Stubs out a simple configuration record with
      * source properties defined. Test methods should set
@@ -36,7 +75,7 @@ private class MA_ReportSourceBatchableTest {
      */
     private static Mass_Action_Configuration__c buildTestConfiguration() {
 
-        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' ];
+        Report r = [ SELECT Id FROM Report WHERE DeveloperName = 'MA_Test_Account_Report' AND NamespacePrefix = null ];
 
         return new Mass_Action_Configuration__c(
             Name = 'Test Config',
@@ -173,6 +212,8 @@ private class MA_ReportSourceBatchableTest {
     @IsTest( SeeAllData = true )
     static void test_batchable_fail_bad_field_mapping() {
 
+        assertSeedAccountExists();
+
         Mass_Action_Configuration__c config = buildTestConfiguration();
         config.Target_Type__c = 'Workflow';
         config.Target_SObject_Type__c = 'Account';
@@ -268,6 +309,8 @@ private class MA_ReportSourceBatchableTest {
     @IsTest( SeeAllData = true )
     static void test_batchable_fail_bad_apex_script() {
 
+        assertSeedAccountExists();
+
         Mass_Action_Configuration__c config = buildTestConfiguration();
         config.Target_Type__c = 'Apex';
         config.Target_Apex_Script__c = 'TEST_FAIL'; // callout mock looks for this keyword
@@ -309,6 +352,8 @@ private class MA_ReportSourceBatchableTest {
 
     @IsTest( SeeAllData = true )
     static void test_batchable_fail_soap_fault_apex_script() {
+
+        assertSeedAccountExists();
 
         Mass_Action_Configuration__c config = buildTestConfiguration();
         config.Target_Type__c = 'Apex';

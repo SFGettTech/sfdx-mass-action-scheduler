@@ -8,7 +8,7 @@
  * Modified by:  Josh Gettman
  * Date:         2026-08-03
  * Description:  Static (hard-coded) field mappings.
- * Version:      1.0
+ * Version:      1.1
  *
  * Modification Log:
  * ---------------------------------------------------------------------------
@@ -17,6 +17,9 @@
  * 1.0 | 2026-08-03 | Josh Gettman | FieldMappingWrapper carries mappingType and
  *     |            |              | sourceValue so the UI can round-trip static
  *     |            |              | value mappings.
+ * ---------------------------------------------------------------------------
+ * 1.1 | 2026-10-12 | Josh Gettman | Added scheduleIntervalMinutes for the
+ *     |            |              | "Repeat Every X Minutes" frequency.
  * ---------------------------------------------------------------------------
  */
 /*
@@ -117,6 +120,9 @@ public inherited sharing class MA_MassActionConfigWrapper {
     @AuraEnabled
     public String scheduleDayOfWeek { get; set; }
 
+    @AuraEnabled
+    public String scheduleIntervalMinutes { get; set; }
+
     // system
 
     @AuraEnabled
@@ -175,6 +181,7 @@ public inherited sharing class MA_MassActionConfigWrapper {
             this.scheduleDayOfMonth = config.Schedule_DayOfMonth__c;
             this.scheduleMonthOfYear = config.Schedule_MonthOfYear__c;
             this.scheduleDayOfWeek = config.Schedule_DayOfWeek__c;
+            this.scheduleIntervalMinutes = config.Schedule_Interval_Minutes__c;
             // system
             this.createdById = config.CreatedById;
             this.createdDate = config.CreatedDate;
@@ -218,7 +225,8 @@ public inherited sharing class MA_MassActionConfigWrapper {
             Schedule_HourOfDay__c = this.scheduleHourOfDay,
             Schedule_DayOfMonth__c = this.scheduleDayOfMonth,
             Schedule_MonthOfYear__c = this.scheduleMonthOfYear,
-            Schedule_DayOfWeek__c = this.scheduleDayOfWeek
+            Schedule_DayOfWeek__c = this.scheduleDayOfWeek,
+            Schedule_Interval_Minutes__c = this.scheduleIntervalMinutes
         );
 
         // some fields need to not be "set" otherwise will cause errors if set to null

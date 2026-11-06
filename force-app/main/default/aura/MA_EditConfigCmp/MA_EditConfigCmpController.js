@@ -8,7 +8,7 @@ License: BSD 3-Clause License
  * Modified by:  Josh Gettman
  * Date:         2026-08-03
  * Description:  Static (hard-coded) field mappings.
- * Version:      1.0
+ * Version:      1.1
  *
  * Modification Log:
  * ---------------------------------------------------------------------------
@@ -16,6 +16,9 @@ License: BSD 3-Clause License
  * ---------------------------------------------------------------------------
  * 1.0 | 2026-08-03 | Josh Gettman | Field Mappings stage lets each target field
  *     |            |              | use a source field or a static value.
+ * ---------------------------------------------------------------------------
+ * 1.1 | 2026-10-12 | Josh Gettman | Save validates the "Repeat Every X
+ *     |            |              | Minutes" inputs.
  * ---------------------------------------------------------------------------
  */
 ({
@@ -296,7 +299,10 @@ License: BSD 3-Clause License
             component.find( 'inputScheduleWeekday' ),
             component.find( 'inputScheduleDayOfMonth' ),
             component.find( 'inputScheduleMonthOfYear' ),
-            component.find( 'inputScheduleCron' )
+            component.find( 'inputScheduleCron' ),
+            component.find( 'inputScheduleIntervalMinutes' ),
+            component.find( 'inputScheduleIntervalHourOfDay' ),
+            component.find( 'inputScheduleIntervalWeekday' )
         ];
 
         helper.validateInputsAsync( component, inputCmps )

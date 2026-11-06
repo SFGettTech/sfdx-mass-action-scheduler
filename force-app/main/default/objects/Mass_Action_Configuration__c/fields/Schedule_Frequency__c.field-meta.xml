@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Schedule_Frequency__c</fullName>
-    <deprecated>false</deprecated>
     <description>On Demand = not scheduled
 Scheduled = user scheduled via simple options
+Interval = repeats every Schedule_Interval_Minutes__c minutes, optionally limited to the selected hours and weekdays
 Custom = user provided own cron expression</description>
-    <externalId>false</externalId>
     <inlineHelpText>How often will this action run?</inlineHelpText>
     <label>Schedule Frequency</label>
     <required>false</required>
@@ -25,6 +24,11 @@ Custom = user provided own cron expression</description>
                 <fullName>Scheduled</fullName>
                 <default>false</default>
                 <label>Scheduled</label>
+            </value>
+            <value>
+                <fullName>Interval</fullName>
+                <default>false</default>
+                <label>Repeat Every X Minutes</label>
             </value>
             <value>
                 <fullName>Custom</fullName>
